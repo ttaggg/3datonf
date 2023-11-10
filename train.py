@@ -32,9 +32,12 @@ def main(_):
     # Load or create model.
     model = pu.create_model(config.model)
 
+    # Create visualizers
+    visualizers = pu.create_visualizers(config.training, FLAGS.output_dir)
+
     # Create trainer and initialize everything.
-    trainer = pu.create_trainer(config.training, model, FLAGS.output_dir,
-                                device)
+    trainer = pu.create_trainer(config.training, model, visualizers,
+                                FLAGS.output_dir, device)
     trainer.set_for_training(init_step=model.init_step)
     trainer.set_for_evaluation(model.init_step, val_data)
 

@@ -25,6 +25,7 @@ from networks.dwsnets_networks import DWSModelForClassification
 from loaders import mnist_classification_dataset
 from models import mnist_classification_model
 from trainers import mnist_classification_trainer
+from visualizers import scalar_tensorboard
 
 
 @dataclass
@@ -96,10 +97,10 @@ def get_config(config_file, output_dir):
     raise FileNotFoundError(f'File {config_file} was not found.')
 
 
-def create_trainer(config, model, output_dir, device):
+def create_trainer(config, model, visualizers, output_dir, device):
     """Get appropriate trainer.
 
-    Args: 
+    Args:
         config: Dict, config.
         model: nn.Module.
         output_dir: String, path to output directory.
@@ -111,14 +112,37 @@ def create_trainer(config, model, output_dir, device):
     trainer_name = config['trainer_name']
     if trainer_name == 'mnist_classification_trainer':
         return mnist_classification_trainer.MnistTrainer(
-            config, model, output_dir, device)
+            config, model, output_dir, device, visualizers)
     raise ValueError(f'Unknown trainer was given: {trainer_name}.')
+
+
+def create_visualizers(config, output_dir):
+    """Get appropriate visuzalizers.
+
+    Args:
+        config: Dict, config.
+        output_dir: String, path to output directory.
+    Returns:
+        visualizers: dict of different visualizers
+    Raises:
+        ValueError if visualizer name is unknown.
+    """
+
+    vis_dict = {}
+    visualizer_names = config.get('visualizers', {})
+    for vis_type, vis_name in visualizer_names.items():
+        if vis_name == 'scalar_visualizer':
+            vis_dict[vis_type] = scalar_tensorboard.ScalarTensorboardVisualizer(
+                output_dir)
+        else:
+            raise ValueError(f'Unknown visualizer was given: {vis_name}.')
+    return vis_dict
 
 
 def create_loader(data_config, batch_size, device):
     """Get appropriate loader.
 
-    Args: 
+    Args:
         device: string
         data_config: Dict, data_config.
         batch_size: integer

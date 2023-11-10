@@ -6,20 +6,18 @@ import os
 import numpy as np
 import torch
 from absl import logging
-from torch.utils import tensorboard
 
 from utils import trainer_utils as tu
 
 
 class Trainer(abc.ABC):
 
-    def __init__(self, config, model, output_dir, device):
+    def __init__(self, config, model, output_dir, device, visualizers=None):
         # General.
         self._config = config
         self._model = model
         self._output_dir = output_dir
-        self._scalar_writer = tensorboard.SummaryWriter(
-            os.path.join(output_dir, 'scalars'))
+
         # Training.
         self._current_step = None
         self._optimizer = None
@@ -27,7 +25,7 @@ class Trainer(abc.ABC):
         self._device = device
         # Evaluation.
         self._test_data = None
-        self._evaluate_freq = None
+        self._vis = visualizers
 
     def set_for_training(self, init_step):
         """Set attributes necessary for training."""
@@ -82,12 +80,13 @@ class Trainer(abc.ABC):
     def on_epoch_end(self):
         """Actions to do in the end of each epoch."""
         self._save(self._current_step)
-        outputs = self.evaluate()
+        metrics = self.evaluate()
 
-        if self._config['lr_scheduler']['name'] == 'reduce_on_plateau':
+        lr_scheduler_conf = self._config['lr_scheduler']
+        if lr_scheduler_conf['name'] == 'reduce_on_plateau':
             # NOTE(oleg): StepLR and ReduceLROnPlateau have different API :(
-            target_metric = self._config['lr_scheduler']['target_metric']
-            self._lr_scheduler.step(np.mean(outputs[target_metric]))
+            target_metric = lr_scheduler_conf.get('target_metric', 'loss')
+            self._lr_scheduler.step(np.mean(metrics[target_metric]))
         else:
             self._lr_scheduler.step()
 
@@ -98,13 +97,6 @@ class Trainer(abc.ABC):
         checkpoint_path = os.path.join(ckpt_dir, f'state_dict_{step}.pt')
         torch.save(self._model.module.network.state_dict(), checkpoint_path)
         logging.info(f'Model was saved to {checkpoint_path}.')
-
-    def _log_scalars_tensorboard(self, log_scalars, step):
-        logging.info(f'Evaluation for step {step}.')
-        for tag, values in log_scalars.items():
-            scalar = torch.tensor(np.stack(values)).mean()
-            logging.info(f'{tag}: {scalar:.3f}')
-            self._scalar_writer.add_scalar(tag, scalar, step)
 
     def evaluate(self, prefix=''):
         raise NotImplementedError

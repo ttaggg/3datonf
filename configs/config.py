@@ -33,6 +33,9 @@ training = {
     'batch_size': _BATCH_SIZE,
     'num_epochs': 50,
     # Optimizer.
+    'visualizers': {
+        'scalars': 'scalar_visualizer'
+    },
     'optimizer': {
         'name': 'adamw',
         'learning_rate': 1e-3,
