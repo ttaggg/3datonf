@@ -60,6 +60,18 @@ def initialize(output_dir, seed, use_gpus):
     logging.info(f'Random seed is {seed}.')
 
 
+def set_device(force_device):
+
+    if force_device in {'cuda', 'mps', 'cpu'}:
+        return torch.device(force_device)
+
+    if torch.cuda.is_available():
+        return torch.device("cuda")
+    elif torch.backends.mps.is_available():
+        return torch.device("mps")
+    return torch.device("cpu")
+
+
 def _dict_to_defaultdict(config):
     """Recursively convert all dicts to defaultdicts."""
     if not isinstance(config, collections.defaultdict):

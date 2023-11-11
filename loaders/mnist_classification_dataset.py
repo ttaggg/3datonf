@@ -87,7 +87,7 @@ class MnistInrDatasetFactory:
 
         train_dataset = MnistInrClassificationDataset((train_set, train_labels),
                                                       statistics=None,
-                                                      device=self._device,
+                                                      device='cpu',
                                                       is_training=True)
 
         train_loader = torch.utils.data.DataLoader(dataset=train_dataset,
@@ -96,10 +96,10 @@ class MnistInrDatasetFactory:
                                                    num_workers=1)
 
         batch: Batch = next(iter(train_loader))
-        weights_mean = [w.mean(0) for w in batch.weights]
-        weights_std = [w.std(0) for w in batch.weights]
-        biases_mean = [w.mean(0) for w in batch.biases]
-        biases_std = [w.std(0) for w in batch.biases]
+        weights_mean = [w.mean(0).to(self._device) for w in batch.weights]
+        weights_std = [w.std(0).to(self._device) for w in batch.weights]
+        biases_mean = [w.mean(0).to(self._device) for w in batch.biases]
+        biases_std = [w.std(0).to(self._device) for w in batch.biases]
 
         return {
             "weights": {
@@ -140,7 +140,8 @@ class MnistInrClassificationDataset(base_dataset.Dataset):
         if self._statistics is not None:
             weights, biases = self._normalize_weights_biases(weights, biases)
 
-        sample = Batch(weights=weights, biases=biases, label=self._labels[idx])
+        label = torch.tensor(self._labels[idx]).to(self._device)
+        sample = Batch(weights=weights, biases=biases, label=label)
 
         return sample
 

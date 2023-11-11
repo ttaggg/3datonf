@@ -24,7 +24,8 @@ def main(_):
                   seed=FLAGS.random_seed,
                   use_gpus=FLAGS.use_gpus)
     config = pu.get_config(FLAGS.config, FLAGS.output_dir)
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    device = pu.set_device(FLAGS.device)
+
     # Create datasets for train and val.
     batch_size = config.training['batch_size']
     train_data, val_data, _ = pu.create_loader(config.data, batch_size, device)

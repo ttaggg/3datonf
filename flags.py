@@ -9,6 +9,7 @@ flags.DEFINE_string('config', None, 'Path to train settings.')
 flags.DEFINE_string('weights', None, 'Which checkpoint to use for prediction.')
 flags.DEFINE_integer('random_seed', 42, 'Random seed value.')
 flags.DEFINE_string('use_gpus', '0', 'List of GPUs to see.')
+flags.DEFINE_string('device', None, 'Device to override auto device choice.')
 
 FLAGS = flags.FLAGS
 
