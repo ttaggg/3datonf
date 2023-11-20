@@ -195,7 +195,7 @@ class DWSLayer(BaseLayer):
     def forward(self, x: Tuple[Tuple[torch.tensor], Tuple[torch.tensor]]):
 
         #DIFF(oleg)
-        if isinstance(x, tuple):
+        if not hasattr(x, 'weights'):
             weights, biases = x[0], x[1]
         else:
             weights, biases = x.weights, x.biases

@@ -27,11 +27,11 @@ def main(_):
     device = pu.set_device(FLAGS.device)
 
     # Create datasets for train and val.
-    batch_size = config.training['batch_size']
-    train_data, val_data, _ = pu.create_loader(config.data, batch_size, device)
+    train_data, val_data, _ = pu.create_loader(config.data, config.model,
+                                               device)
 
     # Load or create model.
-    model = pu.create_model(config.model)
+    model = pu.create_model(config.model, device)
 
     # Create visualizers
     visualizers = pu.create_visualizers(config.training, FLAGS.output_dir)

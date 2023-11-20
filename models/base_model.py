@@ -7,11 +7,12 @@ import torch
 class BaseModel(torch.nn.Module, abc.ABC):
     """Base model class."""
 
-    def __init__(self, config, network, init_step):
+    def __init__(self, config, network, init_step, device):
         super().__init__()
         self._config = config
         self._init_step = init_step
         self._network = network
+        self._device = device
 
     @abc.abstractmethod
     def model_outputs(self, inputs):

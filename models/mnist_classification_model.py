@@ -21,8 +21,8 @@ class CrossEntropyLoss(nn.Module):
 class MnistInrClassificationModel(base_model.BaseModel):
     """MNIST model class."""
 
-    def __init__(self, config, network, init_step):
-        super().__init__(config, network, init_step)
+    def __init__(self, config, network, init_step, device):
+        super().__init__(config, network, init_step, device)
         # Losses.
         loss_config = self._config['loss_functions']
         if loss_config['loss_name'] == 'cross_entropy':
@@ -31,6 +31,7 @@ class MnistInrClassificationModel(base_model.BaseModel):
             raise ValueError('Only cross_entropy is supported.')
 
         self._network_name = config['network']['network_name']
+        self._device = device
 
     def model_outputs(self, inputs):
         outputs = self._network(inputs)

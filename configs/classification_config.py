@@ -32,9 +32,10 @@ training = {
     'trainer_name': 'mnist_classification_trainer',
     'batch_size': _BATCH_SIZE,
     'num_epochs': 50,
+    'vis_n_batches': 1,
     # Optimizer.
     'visualizers': {
-        'scalars': 'scalar_visualizer'
+        'scalars': 'scalar_visualizer',
     },
     'optimizer': {
         'name': 'adamw',
@@ -56,7 +57,6 @@ training = {
 data = {
     'task': 'mnist_classification',
     'dataset_path':  os.path.join(_DATA_PATH, 'mnist-inrs'),
+    'normalize': True,
     'num_workers': 8,
-    'augmentation': {
-    }
 }

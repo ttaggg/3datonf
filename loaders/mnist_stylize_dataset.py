@@ -4,22 +4,34 @@ import glob
 import os
 from typing import NamedTuple, Tuple, Union
 
+# https://github.com/pytorch/pytorch/issues/1355
+import cv2
+
+cv2.setNumThreads(0)
+cv2.ocl.setUseOpenCL(False)
+
 import flags
+import numpy as np
 import torch
 
 from absl import logging
 from sklearn.model_selection import train_test_split
 
 from loaders import base_dataset
+from networks.inr import InrToImage
+from networks.nfn_layers.common import WeightSpaceFeatures
 
 FLAGS = flags.FLAGS
 
 
 class Batch(NamedTuple):
-    """Copied from DWSNet."""
+    """Modiefied from DWSNet."""
     weights: Tuple
+    ori_weights: Tuple
     biases: Tuple
-    label: Union[torch.Tensor, int]
+    ori_biases: Tuple
+    label_image: torch.Tensor
+    ori_image: torch.Tensor
 
     def _assert_same_len(self):
         assert len(set([len(t) for t in self])) == 1
@@ -31,9 +43,11 @@ class Batch(NamedTuple):
         """move batch to device"""
         return self.__class__(
             weights=tuple(w.to(device) for w in self.weights),
+            ori_weights=tuple(w.to(device) for w in self.ori_weights),
             biases=tuple(w.to(device) for w in self.biases),
-            label=self.label.to(device),
-        )
+            ori_biases=tuple(w.to(device) for w in self.ori_biases),
+            label_image=self.label_image.to(device),
+            ori_image=self.ori_image.to(device))
 
     def __len__(self):
         return len(self.weights[0])
@@ -100,7 +114,7 @@ class MnistInrDatasetFactory:
         train_loader = torch.utils.data.DataLoader(dataset=train_dataset,
                                                    batch_size=32,
                                                    shuffle=True,
-                                                   num_workers=1)
+                                                   num_workers=0)
 
         batch: Batch = next(iter(train_loader))
         weights_mean = [w.mean(0).to(self._device) for w in batch.weights]
@@ -125,31 +139,63 @@ class MnistInrClassificationDataset(base_dataset.Dataset):
 
     def __init__(self, dataset, statistics, is_training, config, device):
         super().__init__(dataset, is_training)
-        self._sample_paths, self._labels = dataset
+        self._sample_paths, _ = dataset
         self._device = device
         self._statistics = statistics
-        self._config = config
+        self._inr_to_image = InrToImage(device)
+        self._transform_type = config['transform_type']
+        assert self._transform_type in {
+            'rotate', 'dilate'
+        }, 'Only rotate and dilate are supported.'
 
-        logging.info(
-            f'Dataset size: {len(self._sample_paths)}, device: {device}, training: {is_training}.'
-        )
+        logging.info(f'Dataset size: {len(self._sample_paths)}, '
+                     f'device: {device}, training: {is_training}.')
 
+    @torch.no_grad()
     def __getitem__(self, idx):
         state_dict = torch.load(self._sample_paths[idx],
                                 map_location=self._device)
 
-        weights = tuple(
-            [v.permute(1, 0) for w, v in state_dict.items() if "weight" in w])
-        weights = tuple([w.unsqueeze(-1) for w in weights])
-
+        # NOTE(oleg): currently only NFNet weights' format is used
+        # and not DWSNet: need to permute axes here and in inr_to_image.
+        # [I, O]
+        weights = tuple([v for w, v in state_dict.items() if "weight" in w])
         biases = tuple([v for w, v in state_dict.items() if "bias" in w])
-        biases = tuple([b.unsqueeze(-1) for b in biases])
 
+        # [F, I, O]: feature dim add
+        weights = tuple([w.unsqueeze(0) for w in weights])
+        biases = tuple([b.unsqueeze(0) for b in biases])
+
+        ori_image = self._inr_to_image(weights, biases)
+        # squeeze batch dimension, we do not need it here.
+        ori_image = ori_image.squeeze(0)
+
+        if self._transform_type == 'dilate':
+            label_image = cv2.dilate(ori_image.cpu().detach().numpy(),
+                                     np.ones((3, 3), np.uint8),
+                                     iterations=1)
+        elif self._transform_type == 'rotate':
+            label_image = cv2.rotate(
+                ori_image.squeeze(0).cpu().detach().numpy(),
+                cv2.ROTATE_90_CLOCKWISE)
+            label_image = np.expand_dims(label_image, 0)
+
+        label_image = torch.tensor(label_image, device=self._device)
+
+        ori_weights = weights
+        ori_biases = biases
         if self._statistics is not None:
             weights, biases = self._normalize_weights_biases(weights, biases)
 
-        label = torch.tensor(self._labels[idx]).to(self._device)
-        sample = Batch(weights=weights, biases=biases, label=label)
+        # TODO(oleg): instead of giving original weights, pass means
+        # and std and re-create them when necessary.
+        # Also make metadata instead of huge tuple with everything.
+        sample = Batch(weights=weights,
+                       ori_weights=ori_weights,
+                       biases=biases,
+                       ori_biases=ori_biases,
+                       label_image=label_image,
+                       ori_image=ori_image)
 
         return sample
 

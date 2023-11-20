@@ -20,12 +20,13 @@ from dataclasses import dataclass
 import numpy as np
 import torch
 from torchvision.models import regnet_y_800mf
-from networks.dwsnets_networks import DWSModelForClassification
 
-from loaders import mnist_classification_dataset
-from models import mnist_classification_model
-from trainers import mnist_classification_trainer
-from visualizers import scalar_tensorboard
+from loaders import mnist_classification_dataset, mnist_stylize_dataset
+from models import mnist_classification_model, mnist_stylize_model
+from networks.dwsnets_networks import DWSModelForClassification, DWSModel
+from networks.nfn_networks import TransferNet
+from trainers import mnist_classification_trainer, mnist_stylize_trainer
+from visualizers import scalar_visualizer, image_visualizer
 
 
 @dataclass
@@ -125,6 +126,10 @@ def create_trainer(config, model, visualizers, output_dir, device):
     if trainer_name == 'mnist_classification_trainer':
         return mnist_classification_trainer.MnistTrainer(
             config, model, output_dir, device, visualizers)
+    elif trainer_name == 'mnist_stylize_trainer':
+        return mnist_stylize_trainer.MnistTrainer(config, model, output_dir,
+                                                  device, visualizers)
+
     raise ValueError(f'Unknown trainer was given: {trainer_name}.')
 
 
@@ -140,29 +145,33 @@ def create_visualizers(config, output_dir):
         ValueError if visualizer name is unknown.
     """
 
-    vis_dict = {}
+    vis_dict = collections.defaultdict(lambda: None)
     visualizer_names = config.get('visualizers', {})
     for vis_type, vis_name in visualizer_names.items():
         if vis_name == 'scalar_visualizer':
-            vis_dict[vis_type] = scalar_tensorboard.ScalarTensorboardVisualizer(
+            vis_dict[vis_type] = scalar_visualizer.ScalarTensorboardVisualizer(
+                output_dir)
+        elif vis_name == 'image_visualizer':
+            vis_dict[vis_type] = image_visualizer.ImageTensorboardVisualizer(
                 output_dir)
         else:
             raise ValueError(f'Unknown visualizer was given: {vis_name}.')
     return vis_dict
 
 
-def create_loader(data_config, batch_size, device):
+def create_loader(data_config, model_config, device):
     """Get appropriate loader.
 
     Args:
+        data_config: Dict, data config.
+        model_config: Dict, model config.
         device: string
-        data_config: Dict, data_config.
-        batch_size: integer
     Returns: loader: instances of train, val, test loaders
     Raises:
         ValueError if task_name is unknown.
     """
     task_name = data_config.pop('task')
+    batch_size = model_config['batch_size']
 
     kwargs = {}
     num_workers = data_config.pop('num_workers', 0)
@@ -171,29 +180,35 @@ def create_loader(data_config, batch_size, device):
 
     if task_name == 'mnist_classification':
 
-        dataset_path = data_config.pop('dataset_path')
         factory = mnist_classification_dataset.MnistInrDatasetFactory(
-            dataset_path, device)
+            data_config, device)
         train_loader, val_loader, test_loader = factory.split()
 
-        train_loader = torch.utils.data.DataLoader(train_loader,
-                                                   batch_size=batch_size,
-                                                   shuffle=True,
-                                                   num_workers=num_workers,
-                                                   **kwargs)
-        val_loader = torch.utils.data.DataLoader(val_loader,
-                                                 batch_size=batch_size,
-                                                 shuffle=False,
-                                                 num_workers=num_workers,
-                                                 **kwargs)
-        test_loader = torch.utils.data.DataLoader(test_loader,
-                                                  batch_size=batch_size,
-                                                  shuffle=False,
-                                                  num_workers=num_workers,
-                                                  **kwargs)
-        return train_loader, val_loader, test_loader
+    elif task_name == 'mnist_stylize':
 
-    raise ValueError(f'Unknown task was given: {task_name}.')
+        factory = mnist_stylize_dataset.MnistInrDatasetFactory(
+            data_config, device)
+        train_loader, val_loader, test_loader = factory.split()
+
+    else:
+        raise ValueError(f'Unknown task was given: {task_name}.')
+
+    train_loader = torch.utils.data.DataLoader(train_loader,
+                                               batch_size=batch_size,
+                                               shuffle=True,
+                                               num_workers=num_workers,
+                                               **kwargs)
+    val_loader = torch.utils.data.DataLoader(val_loader,
+                                             batch_size=batch_size,
+                                             shuffle=False,
+                                             num_workers=num_workers,
+                                             **kwargs)
+    test_loader = torch.utils.data.DataLoader(test_loader,
+                                              batch_size=batch_size,
+                                              shuffle=False,
+                                              num_workers=num_workers,
+                                              **kwargs)
+    return train_loader, val_loader, test_loader
 
 
 def _load_state_dict(state_dict_path):
@@ -225,7 +240,9 @@ def create_network(network_configs, state_dict_path):
 
     networks_dict = {
         'regnet_y_800mf': regnet_y_800mf,
-        'dwsnet_classification': DWSModelForClassification
+        'dwsnet_classification': DWSModelForClassification,
+        'dwsnet': DWSModel,
+        'transfer_net': TransferNet,
     }
 
     network_name = network_configs['network_name']
@@ -259,7 +276,7 @@ def create_network(network_configs, state_dict_path):
     return init_step, network
 
 
-def create_model(model_configs, weights=None):
+def create_model(model_configs, device, weights=None):
     """Choose the model.
 
     Args:
@@ -272,7 +289,15 @@ def create_model(model_configs, weights=None):
 
     if model_configs['model_name'] == 'mnist_classification_model':
         model = mnist_classification_model.MnistInrClassificationModel(
-            config=model_configs, network=network, init_step=init_step)
+            config=model_configs,
+            network=network,
+            init_step=init_step,
+            device=device)
+    elif model_configs['model_name'] == 'mnist_stylize_model':
+        model = mnist_stylize_model.MnistInrStylizeModel(config=model_configs,
+                                                         network=network,
+                                                         init_step=init_step,
+                                                         device=device)
     else:
         raise ValueError(f'Unknown model name: {model_configs["model_name"]}.')
 

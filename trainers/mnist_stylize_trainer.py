@@ -30,21 +30,19 @@ class MnistTrainer(base_trainer.Trainer):
 
         metrics_dict = collections.defaultdict(list)
 
-        ground_truth = []
-        predictions = []
         for i, inputs in enumerate(self._test_data):
 
             inputs = self._move_to_device(inputs)
-            losses, outputs = self._model(inputs, evaluation=True)
-            # Save more stuff for dataset wide calculation.
-            ground_truth.extend(inputs.label.cpu().numpy())
-            predictions.extend(outputs.argmax(1).cpu().numpy())
+            losses, output_image = self._model(inputs, evaluation=True)
 
             # Log losses every step.
             metrics_dict[f'loss'].append(losses.detach().cpu())
 
-        accuracy = np.array(ground_truth) == np.array(predictions)
-        metrics_dict[f'accuracy'] = accuracy.astype(np.float32)
+            if i < self._vis_n_batches and self._vis['images']:
+                log_images = torch.cat(
+                    [inputs.ori_image, inputs.label_image, output_image],
+                    dim=-1)
+                self._vis['images'].log(log_images, prefix, self._current_step)
 
         current_lr = trainer_utils.get_learning_rate(self._lr_scheduler)
         metrics_dict['lr'] = current_lr

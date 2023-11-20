@@ -26,6 +26,7 @@ class Trainer(abc.ABC):
         # Evaluation.
         self._test_data = None
         self._vis = visualizers
+        self._vis_n_batches = self._config['vis_n_batches']
 
     def set_for_training(self, init_step):
         """Set attributes necessary for training."""
@@ -55,6 +56,11 @@ class Trainer(abc.ABC):
         if isinstance(inputs, dict):
             for key, value in inputs.items():
                 inputs[key] = value.to(self._device)
+        if isinstance(inputs, (tuple, list)):
+            # TODO(oleg): that's not good
+            for x in inputs:
+                for y in x:
+                    y.to(self._device)
         else:
             inputs.to(self._device)
         return inputs

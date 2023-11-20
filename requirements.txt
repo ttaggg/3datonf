@@ -2,3 +2,6 @@ absl-py==2.0.0
 scikit-learn==1.3.2
 tensorboard==2.15.1
 packaging==23.2 # why though?
+random-fourier-features-pytorch==1.0.1
+opencv-python==4.8.1.78
+einops==0.7.0
