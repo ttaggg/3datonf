@@ -5,22 +5,12 @@
 
 import os
 
-_DATA_PATH = '../datasets'
-_BATCH_SIZE = 512
+_DATA_PATH = '../../datasets'
+_BATCH_SIZE = 256
 
 model = {
     'model_name': 'mnist_stylize_model',
     'network': {
-        # 'network_name': 'dwsnet',
-        # 'network_params': {
-        #     'weight_shapes': tuple([(2, 32, ), (32, 32, ), (32, 1, )]),
-        #     'bias_shapes': tuple([(32,), (32,), (1, )]),
-        #     'input_features': 1,
-        #     'hidden_dim': 32,
-        #     'output_features': 1, # check this though
-        #     'n_hidden': 4,
-        #     'bn': True,
-        # },
         'network_name': 'transfer_net',
         'network_params': {
             'weight_shapes': tuple([(32, 2, ), (32, 32, ), (1, 32, )]),
@@ -71,7 +61,7 @@ training = {
 data = {
     'task': 'mnist_stylize',
     'dataset_path':  os.path.join(_DATA_PATH, 'mnist-inrs'),
-    'normalize': False,
-    'transform_type': 'dilate',
+    'normalize': True,
+    'transform_type': 'rotate',
     'num_workers': 0,
 }

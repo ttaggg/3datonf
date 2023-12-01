@@ -31,7 +31,7 @@ class MnistInrStylizeModel(base_model.BaseModel):
         else:
             raise ValueError('Only mse is supported.')
 
-        self._inr_to_image = InrToImage(device)
+        self._inr_to_image = InrToImage((28, 28, 1), device)
 
     def model_outputs(self, inputs):
         outputs = self._network(inputs)

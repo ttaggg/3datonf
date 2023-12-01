@@ -5,7 +5,7 @@
 
 import os
 
-_DATA_PATH = '../datasets'
+_DATA_PATH = '../../datasets'
 _BATCH_SIZE = 512
 
 model = {

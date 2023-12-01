@@ -142,7 +142,7 @@ class MnistInrClassificationDataset(base_dataset.Dataset):
         self._sample_paths, _ = dataset
         self._device = device
         self._statistics = statistics
-        self._inr_to_image = InrToImage(device)
+        self._inr_to_image = InrToImage((28, 28, 1), device)
         self._transform_type = config['transform_type']
         assert self._transform_type in {
             'rotate', 'dilate'
