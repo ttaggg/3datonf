@@ -61,7 +61,7 @@ training = {
 
 data = {
     'task': 'mnist_rotate',
-    'dataset_path':  os.path.join(_DATA_PATH, 'mnist-inrs-rotate-small'),
+    'dataset_path':  os.path.join(_DATA_PATH, 'mnist-inrs-rotate-full'),
     'normalize': False,
     'num_workers': 0,
 }
