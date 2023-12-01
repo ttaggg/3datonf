@@ -21,11 +21,11 @@ import numpy as np
 import torch
 from torchvision.models import regnet_y_800mf
 
-from loaders import mnist_classification_dataset, mnist_stylize_dataset
-from models import mnist_classification_model, mnist_stylize_model
+from loaders import mnist_classification_dataset, mnist_stylize_dataset, mnist_rotate_dataset
+from models import mnist_classification_model, mnist_stylize_model, mnist_rotate_model
 from networks.dwsnets_networks import DWSModelForClassification, DWSModel
-from networks.nfn_networks import TransferNet
-from trainers import mnist_classification_trainer, mnist_stylize_trainer
+from networks.nfn_networks import TransferNet, TransferRotateNet
+from trainers import mnist_classification_trainer, mnist_stylize_trainer, mnist_rotate_trainer
 from visualizers import scalar_visualizer, image_visualizer
 
 
@@ -129,7 +129,9 @@ def create_trainer(config, model, visualizers, output_dir, device):
     elif trainer_name == 'mnist_stylize_trainer':
         return mnist_stylize_trainer.MnistTrainer(config, model, output_dir,
                                                   device, visualizers)
-
+    elif trainer_name == 'mnist_rotate_trainer':
+        return mnist_rotate_trainer.MnistTrainer(config, model, output_dir,
+                                                 device, visualizers)
     raise ValueError(f'Unknown trainer was given: {trainer_name}.')
 
 
@@ -190,6 +192,12 @@ def create_loader(data_config, model_config, device):
             data_config, device)
         train_loader, val_loader, test_loader = factory.split()
 
+    elif task_name == 'mnist_rotate':
+
+        factory = mnist_rotate_dataset.MnistInrDatasetFactory(
+            data_config, device)
+        train_loader, val_loader, test_loader = factory.split()
+
     else:
         raise ValueError(f'Unknown task was given: {task_name}.')
 
@@ -243,6 +251,7 @@ def create_network(network_configs, state_dict_path):
         'dwsnet_classification': DWSModelForClassification,
         'dwsnet': DWSModel,
         'transfer_net': TransferNet,
+        'transfer_rotate_net': TransferRotateNet,
     }
 
     network_name = network_configs['network_name']
@@ -298,6 +307,11 @@ def create_model(model_configs, device, weights=None):
                                                          network=network,
                                                          init_step=init_step,
                                                          device=device)
+    elif model_configs['model_name'] == 'mnist_rotate_model':
+        model = mnist_rotate_model.MnistInrRotateModel(config=model_configs,
+                                                       network=network,
+                                                       init_step=init_step,
+                                                       device=device)
     else:
         raise ValueError(f'Unknown model name: {model_configs["model_name"]}.')
 

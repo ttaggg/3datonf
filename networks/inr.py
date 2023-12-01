@@ -99,7 +99,7 @@ class INR(nn.Module):
         self.seq = nn.Sequential(*self.layers)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        return self.seq(x) + 0.5
+        return self.seq(x) + 0.5 # TODO(oleg): why +0.5 though
 
 
 def make_coordinates(
@@ -126,15 +126,15 @@ def get_batch_siren(n_layers, in_dim, up_scale, image_size, device):
 
     def func_inp(p):
         values = func_model(p, coords)[0]
-        return torch.permute(values.reshape(*image_size), (2, 0, 1))
+        return torch.permute(values.reshape(*image_size), (2, 1, 0))
 
     return functorch.vmap(func_inp, (0,))
 
 
 class InrToImage:
 
-    def __init__(self, device):
-        self._image_size = (28, 28, 1)
+    def __init__(self, image_size, device):
+        self._image_size = image_size
         self._siren_convert = get_batch_siren(n_layers=3,
                                               in_dim=2,
                                               up_scale=16,
