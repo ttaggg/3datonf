@@ -52,7 +52,7 @@ class MnistInrStylizeModel(base_model.BaseModel):
         new_biases = [bd + b for bd, b in zip(delta_biases, inputs.ori_biases)]
 
         output_image = self._inr_to_image(new_weights, new_biases)
-        loss = self.compute_loss(inputs.label_image, output_image)
+        loss = self.compute_loss(inputs.image_out, output_image)
 
         if evaluation:
             return loss, output_image

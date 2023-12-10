@@ -15,4 +15,5 @@ class ImageTensorboardVisualizer:
 
         for i, image in enumerate(images):
             suffix = '' if meta is None else meta[i]
-            self._image_writer.add_image(f'{prefix}image_{i}_{suffix}', image, step)
+            self._image_writer.add_image(f'{prefix}image_{i}_{suffix}', image,
+                                         step)

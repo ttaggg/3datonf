@@ -39,9 +39,11 @@ class MnistTrainer(base_trainer.Trainer):
             metrics_dict[f'loss'].append(losses.detach().cpu())
 
             if i < self._vis_n_batches and self._vis['images']:
+                # TODO(oleg): consider adding these everywhere.
+                # output_image = torch.clip(output_image, -1, 1)
+                # output_image =  (output_image + 1) / 2
                 log_images = torch.cat(
-                    [inputs.ori_image, inputs.label_image, output_image],
-                    dim=-1)
+                    [inputs.image_in, inputs.image_out, output_image], dim=-1)
                 self._vis['images'].log(log_images, prefix, self._current_step)
 
         current_lr = trainer_utils.get_learning_rate(self._lr_scheduler)

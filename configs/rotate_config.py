@@ -12,14 +12,14 @@ _BATCH_SIZE = 512
 model = {
     'model_name': 'mnist_rotate_model',
     'network': {
-        'network_name': 'transfer_rotate_net',
+        'network_name': 'transfer_net',
         'network_params': {
             'weight_shapes': tuple([(32, 2,), (32, 32,), (1, 32,)]),
             'bias_shapes': tuple([(32,), (32,), (1, )]),
             'pos_enc_cls': None,
             'hidden_chan': 128,
             'hidden_layers': 3,
-            'mode': 'HNP_angle',
+            'mode': 'HNP',
             'out_scale': 0.01,
             'lnorm': False,
             'dropout': 0,
@@ -45,7 +45,7 @@ training = {
     'optimizer': {
         'name': 'adamw',
         'learning_rate': 1e-3,
-        # 'amsgrad': True,
+        'amsgrad': True,
         'weight_decay': 5e-4
     },
     # LR-scheduler.
@@ -61,7 +61,7 @@ training = {
 
 data = {
     'task': 'mnist_rotate',
-    'dataset_path':  os.path.join(_DATA_PATH, 'mnist-inrs-rotate-full'),
-    'normalize': False,
+    'dataset_path':  os.path.join(_DATA_PATH, 'mnist-inrs-rotate-small'),
+    'normalize': True,
     'num_workers': 0,
 }

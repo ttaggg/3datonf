@@ -30,8 +30,8 @@ class Batch(NamedTuple):
     ori_weights: Tuple
     biases: Tuple
     ori_biases: Tuple
-    label_image: torch.Tensor
-    ori_image: torch.Tensor
+    image_in: torch.Tensor
+    image_out: torch.Tensor
 
     def _assert_same_len(self):
         assert len(set([len(t) for t in self])) == 1
@@ -46,8 +46,8 @@ class Batch(NamedTuple):
             ori_weights=tuple(w.to(device) for w in self.ori_weights),
             biases=tuple(w.to(device) for w in self.biases),
             ori_biases=tuple(w.to(device) for w in self.ori_biases),
-            label_image=self.label_image.to(device),
-            ori_image=self.ori_image.to(device))
+            image_in=self.image_in.to(device),
+            image_out=self.image_out.to(device))
 
     def __len__(self):
         return len(self.weights[0])
@@ -144,9 +144,7 @@ class MnistInrClassificationDataset(base_dataset.Dataset):
         self._statistics = statistics
         self._inr_to_image = InrToImage((28, 28, 1), device)
         self._transform_type = config['transform_type']
-        assert self._transform_type in {
-            'rotate', 'dilate'
-        }, 'Only rotate and dilate are supported.'
+        assert self._transform_type in {'rotate'}, 'Only rotate is supported.'
 
         logging.info(f'Dataset size: {len(self._sample_paths)}, '
                      f'device: {device}, training: {is_training}.')
@@ -166,21 +164,18 @@ class MnistInrClassificationDataset(base_dataset.Dataset):
         weights = tuple([w.unsqueeze(0) for w in weights])
         biases = tuple([b.unsqueeze(0) for b in biases])
 
-        ori_image = self._inr_to_image(weights, biases)
+        image_in = self._inr_to_image(weights, biases)
         # squeeze batch dimension, we do not need it here.
-        ori_image = ori_image.squeeze(0)
+        image_in = image_in.squeeze(0)
 
-        if self._transform_type == 'dilate':
-            label_image = cv2.dilate(ori_image.cpu().detach().numpy(),
-                                     np.ones((3, 3), np.uint8),
-                                     iterations=1)
-        elif self._transform_type == 'rotate':
-            label_image = cv2.rotate(
-                ori_image.squeeze(0).cpu().detach().numpy(),
-                cv2.ROTATE_90_CLOCKWISE)
-            label_image = np.expand_dims(label_image, 0)
+        # DEBUG: hardcoded value for an angle
+        angle = 15.0
 
-        label_image = torch.tensor(label_image, device=self._device)
+        M = cv2.getRotationMatrix2D((14, 14), angle, 1.0)
+        image_out = cv2.warpAffine(
+            image_in.squeeze(0).cpu().detach().numpy(), M, (28, 28))
+        image_out = np.expand_dims(image_out, 0)
+        image_out = torch.tensor(image_out, device=self._device)
 
         ori_weights = weights
         ori_biases = biases
@@ -194,8 +189,8 @@ class MnistInrClassificationDataset(base_dataset.Dataset):
                        ori_weights=ori_weights,
                        biases=biases,
                        ori_biases=ori_biases,
-                       label_image=label_image,
-                       ori_image=ori_image)
+                       image_in=image_in,
+                       image_out=image_out)
 
         return sample
 

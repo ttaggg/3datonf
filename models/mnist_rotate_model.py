@@ -15,10 +15,7 @@ class MeanSquareError(nn.Module):
         self._mse_loss = torch.nn.MSELoss()
 
     def forward(self, target, prediction):
-        # loss = 0
-        # for tr, pr in zip(target, prediction):
-            # loss += self._mse_loss(pr, tr)
-        loss = self._mse_loss(target, prediction) 
+        loss = self._mse_loss(prediction, target)
         return loss.mean()
 
 
@@ -34,7 +31,6 @@ class MnistInrRotateModel(base_model.BaseModel):
         else:
             raise ValueError('Only mse is supported.')
         self._inr_to_image = InrToImage((28, 28, 1), device)
-
 
     def model_outputs(self, inputs):
         outputs = self._network(inputs)
@@ -54,12 +50,12 @@ class MnistInrRotateModel(base_model.BaseModel):
         ]
         new_biases = [bd + b for bd, b in zip(delta_biases, inputs.ori_biases)]
 
-        image_out = self._inr_to_image(new_weights, new_biases)
-        # w_loss = self.compute_loss(inputs.weights_out, new_weights)
-        # b_loss = self.compute_loss(inputs.biases_out, new_biases)
-        # loss = w_loss + b_loss
-        loss = self.compute_loss(inputs.image_in, image_out)
+        new_image = self._inr_to_image(new_weights, new_biases)
+        # new_image = torch.clip(new_image, -1, 1)
+        # new_image =  (new_image + 1) / 2
+
+        loss = self.compute_loss(inputs.image_out, new_image)
 
         if evaluation:
-            return loss, (new_weights, new_biases)
+            return loss, new_image
         return loss

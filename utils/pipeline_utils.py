@@ -24,7 +24,7 @@ from torchvision.models import regnet_y_800mf
 from loaders import mnist_classification_dataset, mnist_stylize_dataset, mnist_rotate_dataset
 from models import mnist_classification_model, mnist_stylize_model, mnist_rotate_model
 from networks.dwsnets_networks import DWSModelForClassification, DWSModel
-from networks.nfn_networks import TransferNet, TransferRotateNet
+from networks.nfn_networks import TransferNet
 from trainers import mnist_classification_trainer, mnist_stylize_trainer, mnist_rotate_trainer
 from visualizers import scalar_visualizer, image_visualizer
 
@@ -211,11 +211,6 @@ def create_loader(data_config, model_config, device):
                                              shuffle=False,
                                              num_workers=num_workers,
                                              **kwargs)
-    test_loader = torch.utils.data.DataLoader(test_loader,
-                                              batch_size=batch_size,
-                                              shuffle=False,
-                                              num_workers=num_workers,
-                                              **kwargs)
     return train_loader, val_loader, test_loader
 
 
@@ -251,7 +246,6 @@ def create_network(network_configs, state_dict_path):
         'dwsnet_classification': DWSModelForClassification,
         'dwsnet': DWSModel,
         'transfer_net': TransferNet,
-        'transfer_rotate_net': TransferRotateNet,
     }
 
     network_name = network_configs['network_name']
@@ -277,7 +271,6 @@ def create_network(network_configs, state_dict_path):
 
     if state_dict_path is not None:
         network_state_dict, init_step = _load_state_dict(state_dict_path)
-        print([x for x in network_state_dict.keys() if "embeddings" in x])
         network.load_state_dict(network_state_dict, strict=True)
         logging.info(f'Weights for {network_name} are loaded from '
                      f'state_dict {state_dict_path}.')

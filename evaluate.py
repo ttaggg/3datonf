@@ -7,12 +7,18 @@ python evaluate.py \
 """
 
 from absl import app
-from absl import logging
 
 import flags
+import numpy as np
+import torch
+
 from utils import pipeline_utils as pu
+from visualizers import image_visualizer
+from loaders.mnist_stylize_dataset import Batch
 
 FLAGS = flags.FLAGS
+
+# TODO(oleg): clean everything here
 
 
 def main(_):
@@ -27,23 +33,63 @@ def main(_):
                   seed=FLAGS.random_seed,
                   use_gpus=FLAGS.use_gpus)
     config = pu.get_config(FLAGS.config, FLAGS.output_dir)
+    device = pu.set_device(FLAGS.device)
 
     # Create dataset for test.
-    batch_size = config.training['batch_size']
-    _, _, test_data = pu.create_loader(config.data, batch_size)
+    _, _, test_data = pu.create_loader(config.data, config.model, device)
+
+    def generator():
+        for i in range(16):
+            angles = [15.0]
+            yield torch.utils.data._utils.collate.default_collate(
+                [test_data.__getitem__(i, a) for a in angles])
+
+    class IterDataset(torch.utils.data.IterableDataset):
+
+        def __init__(self, generator):
+            self.generator = generator
+
+        def __iter__(self):
+            return self.generator()
+
+    test_loader = IterDataset(generator)
+
+    # Visualizer
+    vis = image_visualizer.ImageTensorboardVisualizer(FLAGS.output_dir)
 
     # Load or create model.
-    model = pu.create_model(config.model, FLAGS.weights)
+    model = pu.create_model(config.model, device, FLAGS.weights)
     model.eval()
+    model.to(device)
 
-    # Create trainer and initialize everything.
-    trainer = pu.create_trainer(config.training, model, FLAGS.output_dir)
-    trainer.set_for_evaluation(model.init_step, test_data)
+    for i, sample in enumerate(test_loader):
+        images = [sample.image_in]
+        for j in range(6):
 
-    # Run evaluation on the whole test set.
-    logging.info(f'Evaluation is starting.')
-    trainer.evaluate(prefix='test_')
-    logging.info(f'Evaluation is done.')
+            _, params, new_image = model(sample, evaluation=True)
+            new_weights, new_biases = params
+
+            new_weights = [x.squeeze(dim=0) for x in new_weights]
+            new_biases = [x.squeeze(dim=0) for x in new_biases]
+
+            norm_new_weights, norm_new_bises = test_data._normalize_weights_biases(
+                new_weights, new_biases)
+
+            sample = torch.utils.data._utils.collate.default_collate([
+                Batch(weights=norm_new_weights,
+                      ori_weights=new_weights,
+                      biases=norm_new_bises,
+                      ori_biases=new_biases,
+                      image_out=new_image,
+                      image_in=new_image,
+                      angle=15.)
+            ])
+
+            images.append(new_image)
+
+        log_images = torch.cat(images, dim=-1)
+
+        vis.log(log_images, prefix=f'test_{i}', step=0)
 
 
 if __name__ == '__main__':

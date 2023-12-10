@@ -34,7 +34,7 @@ training = {
     # General.
     'trainer_name': 'mnist_stylize_trainer',
     'batch_size': _BATCH_SIZE,
-    'num_epochs': 100,
+    'num_epochs': 50,
     'vis_n_batches': 1,
     # Optimizer.
     'visualizers': {
@@ -51,7 +51,7 @@ training = {
     'lr_scheduler': {
         'name': 'step_lr',
         'params': {
-            'step_size': 20,
+            'step_size': 10,
             'gamma': 0.3,
         }
     }
