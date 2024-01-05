@@ -238,8 +238,10 @@ class MnistInrClassificationDataset(base_dataset.Dataset):
         bm = self._statistics["biases"]["mean"]
         bs = self._statistics["biases"]["std"]
 
-        weights = tuple((w - m) / s for w, m, s in zip(weights, wm, ws))
-        biases = tuple((w - m) / s for w, m, s in zip(biases, bm, bs))
+        # weights = tuple((w - m) / s for w, m, s in zip(weights, wm, ws))
+        # biases = tuple((w - m) / s for w, m, s in zip(biases, bm, bs))
+        weights = tuple((w - m) for w, m, s in zip(weights, wm, ws))
+        biases = tuple((w - m) for w, m, s in zip(biases, bm, bs))
 
         return weights, biases
 

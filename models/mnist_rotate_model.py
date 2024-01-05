@@ -18,6 +18,12 @@ class MeanSquareError(nn.Module):
         loss = self._mse_loss(prediction, target)
         return loss.mean()
 
+    # def forward(self, target, prediction):
+    #     loss = 0
+    #     for pr, tr in zip(prediction, target):
+    #         loss += self._mse_loss(pr, tr)
+    #     return loss.mean()
+    
 
 class MnistInrRotateModel(base_model.BaseModel):
     """MNIST model class."""
@@ -51,10 +57,11 @@ class MnistInrRotateModel(base_model.BaseModel):
         new_biases = [bd + b for bd, b in zip(delta_biases, inputs.ori_biases)]
 
         new_image = self._inr_to_image(new_weights, new_biases)
-        # new_image = torch.clip(new_image, -1, 1)
-        # new_image =  (new_image + 1) / 2
 
         loss = self.compute_loss(inputs.image_out, new_image)
+        # loss_w = self.compute_loss(inputs.weights_out, new_weights)
+        # loss_b = self.compute_loss(inputs.biases_out, new_biases)
+        # loss = loss_w + loss_b
 
         if evaluation:
             return loss, new_image

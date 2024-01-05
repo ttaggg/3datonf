@@ -7,7 +7,7 @@ import os
 
 
 _DATA_PATH = '../../datasets'
-_BATCH_SIZE = 512
+_BATCH_SIZE = 256
 
 model = {
     'model_name': 'mnist_rotate_model',
@@ -45,8 +45,8 @@ training = {
     'optimizer': {
         'name': 'adamw',
         'learning_rate': 1e-3,
-        'amsgrad': True,
-        'weight_decay': 5e-4
+        # 'amsgrad': True,
+        # 'weight_decay': 5e-4
     },
     # LR-scheduler.
     'lr_scheduler': {
@@ -61,7 +61,8 @@ training = {
 
 data = {
     'task': 'mnist_rotate',
-    'dataset_path':  os.path.join(_DATA_PATH, 'mnist-inrs-rotate-small'),
-    'normalize': True,
+    # 'dataset_path':  os.path.join(_DATA_PATH, 'mnist-inrs-rotate-full'),
+    'dataset_path':  os.path.join(_DATA_PATH, 'less_converged'),
+    'normalize': False,
     'num_workers': 0,
 }
