@@ -331,7 +331,7 @@ class HNPLinear(nn.Module):
 
         out_weights, out_biases = [], []
         for i in range(self.L):
-            weight, bias = wsfeat[i]
+            weight, bias, _ = wsfeat[i]
             if i == 0:
                 rpt = [self.rearr1_wt1(weight), row_means[1], bias]
                 if i + 1 == self.L - 1:
@@ -436,11 +436,11 @@ class HNPLinearAngle(nn.Module):
 
                 # num_ch = network_spec.weight_spec[i].shape[0]
                 # self._angle_emb_merge[i] = nn.Sequential(
-                    # nn.Linear(num_ch + 1, num_ch))
+                # nn.Linear(num_ch + 1, num_ch))
                 # torch.nn.init.zeros_(self._angle_emb_merge[i][0].weight)
                 # torch.nn.init.zeros_(self._angle_emb_merge[i][0].bias)
                 # self.add_module(f"layer_{i}_angle_merge",
-                                # self._angle_emb_merge[i])
+                # self._angle_emb_merge[i])
 
                 # BIASES
                 self._angle_emb_bias[i] = nn.Sequential(
@@ -454,11 +454,11 @@ class HNPLinearAngle(nn.Module):
 
                 # num_ch = network_spec.weight_spec[i].shape[0]
                 # self._angle_emb_merge_bias[i] = nn.Sequential(
-                    # nn.Linear(num_ch + 1, num_ch))
+                # nn.Linear(num_ch + 1, num_ch))
                 # torch.nn.init.zeros_(self._angle_emb_merge_bias[i][0].weight)
                 # torch.nn.init.zeros_(self._angle_emb_merge_bias[i][0].bias)
                 # self.add_module(f"layer_{i}_angle_merge_bias",
-                                # self._angle_emb_merge_bias[i])
+                # self._angle_emb_merge_bias[i])
 
             elif i == self.L - 1:
                 fac_im1 = filter_facs[i - 1]
@@ -487,7 +487,7 @@ class HNPLinearAngle(nn.Module):
                 # num_ch = network_spec.weight_spec[i].shape[0]
                 # self._angle_emb_merge[i] = nn.Sequential(nn.Linear(32 + 1, 32))
                 # self.add_module(f"layer_{i}_angle_merge",
-                                # self._angle_emb_merge[i])
+                # self._angle_emb_merge[i])
 
                 # # BIASES
                 self._angle_emb_bias[i] = nn.Sequential(
@@ -501,11 +501,11 @@ class HNPLinearAngle(nn.Module):
 
                 # num_ch = network_spec.weight_spec[i].shape[0]
                 # self._angle_emb_merge_bias[i] = nn.Sequential(
-                    # nn.Linear(num_ch + 1, num_ch))
+                # nn.Linear(num_ch + 1, num_ch))
                 # torch.nn.init.zeros_(self._angle_emb_merge_bias[i][0].weight)
                 # torch.nn.init.zeros_(self._angle_emb_merge_bias[i][0].bias)
                 # self.add_module(f"layer_{i}_angle_merge_bias",
-                                # self._angle_emb_merge_bias[i])
+                # self._angle_emb_merge_bias[i])
 
             else:
                 self.add_module(
@@ -517,8 +517,7 @@ class HNPLinearAngle(nn.Module):
 
                 # WEIGHTS
                 self._angle_emb[i] = nn.Sequential(
-                    nn.Linear(2, 64),
-                    nn.ReLU(),
+                    nn.Linear(2, 64), nn.ReLU(),
                     nn.Linear(64, 32 * n_out * fac_i * out_channels))
                 # torch.nn.init.zeros_(self._angle_emb[i][0].weight)
                 # torch.nn.init.zeros_(self._angle_emb[i][0].bias)
@@ -529,7 +528,7 @@ class HNPLinearAngle(nn.Module):
                 # num_ch = network_spec.weight_spec[i].shape[0]
                 # self._angle_emb_merge[i] = nn.Sequential(nn.Linear(32 + 1, 32))
                 # self.add_module(f"layer_{i}_angle_merge",
-                                # self._angle_emb_merge[i])
+                # self._angle_emb_merge[i])
 
                 # BIASES
                 self._angle_emb_bias[i] = nn.Sequential(
@@ -543,11 +542,11 @@ class HNPLinearAngle(nn.Module):
 
                 # num_ch = network_spec.weight_spec[i].shape[0]
                 # self._angle_emb_merge_bias[i] = nn.Sequential(
-                    # nn.Linear(num_ch + 1, num_ch))
+                # nn.Linear(num_ch + 1, num_ch))
                 # torch.nn.init.zeros_(self._angle_emb_merge_bias[i][0].weight)
                 # torch.nn.init.zeros_(self._angle_emb_merge_bias[i][0].bias)
                 # self.add_module(f"layer_{i}_angle_merge_bias",
-                                # self._angle_emb_merge_bias[i])
+                # self._angle_emb_merge_bias[i])
 
                 fac_im1, fac_ip1 = filter_facs[i - 1], filter_facs[i + 1]
                 row_in, col_in = (fac_im1 + fac_i + 1) * in_channels, (
@@ -633,7 +632,7 @@ class HNPLinearAngle(nn.Module):
                 u3 = self._angle_emb_bias[i](angle)
                 u3 = torch.unsqueeze(u3, -1)
                 u3 = torch.squeeze(u3, -3)
-                
+
                 # u = torch.cat([u, u3], dim=-1)
                 # u = self._angle_emb_merge_bias[i](u)
                 u = u + u3
@@ -729,13 +728,22 @@ class ChannelLinear(nn.Module):
     def __init__(self, in_channels, out_channels, bias=True):
         super().__init__()
         self.linear = nn.Linear(in_channels, out_channels, bias=bias)
+        self.linear_angle = nn.Linear(2, out_channels, bias=bias)
         self.channels_last = Rearrange("b c ... -> b ... c")
         self.channels_first = Rearrange("b ... c -> b c ...")
 
-    def forward(self, x):
-        x = self.channels_last(x)
+    def forward(self, x, angle):
+        x = torch.movedim(x, 1, -1)
         x = self.linear(x)
-        return self.channels_first(x)
+        angle = self.linear_angle(angle)
+
+        if len(x.shape) == 4:
+            angle = angle.unsqueeze(-2)
+
+        x = x + angle
+
+        x = torch.movedim(x, -1, 1)
+        return x
 
 
 class NPAttention(nn.Module):
@@ -746,7 +754,7 @@ class NPAttention(nn.Module):
         channels,
         num_heads=8,
         dropout=0,
-        share_projections=True,
+        share_projections=False,
         ablate_crossterm=False,
         ablate_diagonalterm=False,
     ):
@@ -762,16 +770,18 @@ class NPAttention(nn.Module):
             self.bias_to_qkv = nn.ModuleList()
             self.unproject_weight = nn.ModuleList(
             )  # maps channel dim c --> k * k * c
+            self.unproject_bias = nn.ModuleList(
+            )  # maps channel dim c --> k * k * c
             filter_facs = [
-                int(np.prod(spec.shape[2:]))
+                int(np.prod(spec.shape[0:]))
                 for spec in network_spec.weight_spec
             ]
-            for filter_fac in filter_facs:
-                self.weight_to_qkv.append(
-                    ChannelLinear(filter_fac * channels, 3 * channels))
-                self.bias_to_qkv.append(ChannelLinear(channels, 3 * channels))
-                self.unproject_weight.append(
-                    ChannelLinear(channels, filter_fac * channels))
+            for i, filter_fac in enumerate(filter_facs):
+                self.weight_to_qkv.append(ChannelLinear(1, 3 * channels))
+                self.bias_to_qkv.append(ChannelLinear(1, 3 * channels))
+                self.unproject_weight.append(ChannelLinear(channels, 1))  # !!!
+                self.unproject_bias.append(ChannelLinear(channels, 1))  # !!!
+
         self.nh = num_heads
         self.ch = channels // num_heads  # channels per head
         self.dropout = nn.Dropout(dropout)
@@ -788,31 +798,43 @@ class NPAttention(nn.Module):
         wsfeat = shape_wsfeat_symmetry(wsfeat, self.network_spec)
         out_weights = [torch.zeros_like(w) for w in wsfeat.weights]
         out_biases = [torch.zeros_like(b) for b in wsfeat.biases]
+        angle = wsfeat.angle
+
         if self.share_projections:
             qkv = wsfeat.map(self.to_qkv)
         else:
             qkv_weights, qkv_biases = [], []
             for i in range(len(self.network_spec)):
-                qkv_weights.append(self.weight_to_qkv[i](wsfeat.weights[i]))
-                qkv_biases.append(self.bias_to_qkv[i](wsfeat.biases[i]))
-            qkv = WeightSpaceFeatures(qkv_weights, qkv_biases)
+                qkv_weights.append(self.weight_to_qkv[i](wsfeat.weights[i],
+                                                         angle))
+                qkv_biases.append(self.bias_to_qkv[i](wsfeat.biases[i], angle))
+            qkv = WeightSpaceFeatures(qkv_weights, qkv_biases, angle)
+
         qkv = qkv.map(self.split_heads)
+
         rowcol_means = [w.mean(dim=(-2, -1)) for w in qkv.weights]  # (B, nh, c)
         bias_means = [b.mean(dim=-1) for b in qkv.biases]  # (B, nh, c)
         qkv_avgs = torch.stack(rowcol_means + bias_means,
                                dim=-2)  # (B, nh, 2 * n_layers, 3ch)
+
         q_avg, k_avg, v_avg = qkv_avgs.tensor_split(
             3, dim=-1)  # (B, nh, 2 * n_layers, ch)
+
         if not self.ablate_diagonalterm:
             wb_out = self.combine_nh_nc(simple_attention(q_avg, k_avg, v_avg))
             w_out, b_out = wb_out.tensor_split(2,
                                                dim=-2)  # (B, n_layers, nh*ch)
+
             for i in range(len(out_weights)):
                 w_out_i = w_out[:, i].unsqueeze(-1).unsqueeze(-1)
+                b_out_i = b_out[:, i].unsqueeze(-1)
+
                 if not self.share_projections:
-                    w_out_i = self.unproject_weight[i](w_out_i)
+                    w_out_i = self.unproject_weight[i](w_out_i, angle)
+                    b_out_i = self.unproject_bias[i](b_out_i, angle)
                 out_weights[i] += w_out_i
-                out_biases[i] += b_out[:, i].unsqueeze(-1)
+                out_biases[i] += b_out_i
+
         if self.ablate_crossterm:
             return unshape_wsfeat_symmetry(
                 WeightSpaceFeatures(tuple(out_weights), tuple(out_biases)),
@@ -846,14 +868,20 @@ class NPAttention(nn.Module):
                     0, 1, 3, 4, 2),
                                               start_dim=1,
                                               end_dim=2)
+                out_biases_i = torch.flatten(out[:, :,
+                                                 n_im1:n_im1 + 1].squeeze(2),
+                                             start_dim=1,
+                                             end_dim=2)
+
                 if not self.share_projections:
-                    out_weights_i = self.unproject_weight[i](out_weights_i)
+                    out_weights_i = self.unproject_weight[i](out_weights_i,
+                                                             angle)
+                    out_biases_i = self.unproject_bias[i](out_biases_i, angle)
+
                 out_weights[i] += out_weights_i
                 # b nh 1 ch n_i -> b (nh ch) n_i
-                out_biases[i] += torch.flatten(out[:, :,
-                                                   n_im1:n_im1 + 1].squeeze(2),
-                                               start_dim=1,
-                                               end_dim=2)
+                out_biases[i] += out_biases_i
+
                 idx = n_im1 + 1
             if i < len(wsfeat) - 1:
                 # b nh n_ip1 ch n_i -> b (nh ch) n_ip1 n_i
@@ -861,11 +889,11 @@ class NPAttention(nn.Module):
                                                 start_dim=1,
                                                 end_dim=2)
                 if not self.share_projections:
-                    out_weights_ip1 = self.unproject_weight[i +
-                                                            1](out_weights_ip1)
+                    out_weights_ip1 = self.unproject_weight[i + 1](
+                        out_weights_ip1, angle)
                 out_weights[i + 1] += out_weights_ip1
         return unshape_wsfeat_symmetry(
-            WeightSpaceFeatures(tuple(out_weights), tuple(out_biases)),
+            WeightSpaceFeatures(tuple(out_weights), tuple(out_biases), angle),
             self.network_spec)
 
     def __repr__(self):
