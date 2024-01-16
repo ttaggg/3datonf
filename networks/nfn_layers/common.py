@@ -39,7 +39,7 @@ class NetworkSpec:
 
 class WeightSpaceFeatures(collections.abc.Sequence):
 
-    def __init__(self, weights, biases):
+    def __init__(self, weights, biases, angle=None):
         # No mutability
         if isinstance(weights, list):
             weights = tuple(weights)
@@ -47,6 +47,7 @@ class WeightSpaceFeatures(collections.abc.Sequence):
             biases = tuple(biases)
         self.weights = weights
         self.biases = biases
+        self.angle = angle
 
     def __len__(self):
         return len(self.weights)
@@ -55,43 +56,56 @@ class WeightSpaceFeatures(collections.abc.Sequence):
         return zip(self.weights, self.biases)
 
     def __getitem__(self, idx):
-        return (self.weights[idx], self.biases[idx])
+        return (self.weights[idx], self.biases[idx], self.angle)
 
     def __add__(self, other):
         out_weights = tuple(
             w1 + w2 for w1, w2 in zip(self.weights, other.weights))
         out_biases = tuple(b1 + b2 for b1, b2 in zip(self.biases, other.biases))
-        return WeightSpaceFeatures(out_weights, out_biases)
+
+        out_angle = None
+        if self.angle is not None and other.angle is not None:
+            raise NotImplementedError  # hmmm
+
+        return WeightSpaceFeatures(out_weights, out_biases, out_angle)
 
     def __mul__(self, other):
         if isinstance(other, WeightSpaceFeatures):
             weights = tuple(
                 w1 * w2 for w1, w2 in zip(self.weights, other.weights))
             biases = tuple(b1 * b2 for b1, b2 in zip(self.biases, other.biases))
-            return WeightSpaceFeatures(weights, biases)
+
+            if self.angle is not None and other.angle is not None:
+                raise NotImplementedError  # hmmm
+
+            return WeightSpaceFeatures(weights, biases, out_angle)
         return self.map(lambda x: x * other)
 
     def detach(self):
         """Returns a copy with detached tensors."""
         return WeightSpaceFeatures(tuple(w.detach() for w in self.weights),
-                                   tuple(b.detach() for b in self.biases))
+                                   tuple(b.detach() for b in self.biases),
+                                   self.angle.detach())
 
     def map(self, func):
         """Applies func to each weight and bias tensor."""
         return WeightSpaceFeatures(tuple(func(w) for w in self.weights),
-                                   tuple(func(b) for b in self.biases))
+                                    tuple(func(b) for b in self.biases),
+                                    self.angle)
+
 
     def to(self, device):
         """Moves all tensors to device."""
         return WeightSpaceFeatures(
             tuple(w.to(device, non_blocking=True) for w in self.weights),
-            tuple(b.to(device, non_blocking=True) for b in self.biases))
+            tuple(b.to(device, non_blocking=True) for b in self.biases),
+            self.angle.to(device, non_blocking=True))
 
     @classmethod
     def from_zipped(cls, weight_and_biases):
         """Converts a list of (weights, biases) into a WeightSpaceFeatures object."""
         weights, biases = zip(*weight_and_biases)
-        return cls(weights, biases)
+        return cls(weights, biases, angle=None)
 
 
 def state_dict_to_tensors(state_dict):

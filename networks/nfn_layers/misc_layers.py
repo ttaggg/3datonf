@@ -125,7 +125,12 @@ class TupleOp(nn.Module):
     def forward(self, wsfeat: WeightSpaceFeatures) -> WeightSpaceFeatures:
         out_weights = [self.op(w) for w in wsfeat.weights]
         out_bias = [self.op(b) for b in wsfeat.biases]
-        return WeightSpaceFeatures(out_weights, out_bias)
+
+        out_angle = None
+        if wsfeat.angle is not None:
+            out_angle = wsfeat.angle
+
+        return WeightSpaceFeatures(out_weights, out_bias, out_angle)
 
     def __repr__(self):
         return f"TupleOp({self.op})"

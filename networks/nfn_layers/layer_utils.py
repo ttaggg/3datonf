@@ -40,7 +40,7 @@ def shape_wsfeat_symmetry(params, network_spec):
         else:
             reshaped_weights.append(
                 rearrange(weight, "b c o i h w -> b (c h w) o i"))
-    return WeightSpaceFeatures(reshaped_weights, bias)
+    return WeightSpaceFeatures(reshaped_weights, bias, params.angle)
 
 
 def unshape_wsfeat_symmetry(params, network_spec):
@@ -54,4 +54,4 @@ def unshape_wsfeat_symmetry(params, network_spec):
             _, _, h, w = weight_spec.shape
             unreshaped_weights.append(
                 rearrange(weight, "b (c h w) o i -> b c o i h w", h=h, w=w))
-    return WeightSpaceFeatures(unreshaped_weights, bias)
+    return WeightSpaceFeatures(unreshaped_weights, bias, params.angle)

@@ -15,6 +15,7 @@ from PIL import Image
 from sklearn.model_selection import train_test_split
 
 from loaders import base_dataset
+from networks.inr import InrToImage
 
 FLAGS = flags.FLAGS
 
@@ -185,6 +186,8 @@ class MnistInrClassificationDataset(base_dataset.Dataset):
         logging.info(f'Dataset size: {len(self._samples)}, '
                      f'device: {device}, training: {is_training}.')
 
+        self._inr_to_image = InrToImage((28, 28, 1), device)
+
     @torch.no_grad()
     def __getitem__(self, idx):
 
@@ -197,15 +200,10 @@ class MnistInrClassificationDataset(base_dataset.Dataset):
         state_dict_out = torch.load(model_out, map_location=self._device)
         weights_out, biases_out = _preprocess_weights_biases(state_dict_out)
 
-        image_in = np.array(Image.open(image_in).convert('L'),
-                            dtype=np.float32) / 255
-        image_in = np.expand_dims(image_in, 0)
-        image_in = torch.tensor(image_in, device=self._device)
-
-        image_out = np.array(Image.open(image_out).convert('L'),
-                             dtype=np.float32) / 255
-        image_out = np.expand_dims(image_out, 0)
-        image_out = torch.tensor(image_out, device=self._device)
+        image_in = self._inr_to_image(weights_in, biases_in)
+        image_in = image_in.squeeze(0)
+        image_out = self._inr_to_image(weights_out, biases_out)
+        image_out = image_out.squeeze(0)
 
         ori_weights_in = weights_in
         ori_biases_in = biases_in
@@ -215,7 +213,7 @@ class MnistInrClassificationDataset(base_dataset.Dataset):
 
         angle = np.array(np.deg2rad(angle_out - angle_in), dtype=np.float32)
         angle = np.expand_dims(angle, 0)
-        angle = torch.tensor(angle, device=self._device)
+        angle = torch.tensor([np.sin(angle), np.cos(angle)], device=self._device).T
 
         # TODO(oleg): instead of giving original weights, pass means
         # and std and re-create them when necessary.

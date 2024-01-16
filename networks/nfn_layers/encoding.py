@@ -30,10 +30,10 @@ class GaussianFourierFeatureTransform(nn.Module):
     def forward(self, wsfeat):
         out_weights, out_biases = [], []
         for i in range(len(self.network_spec)):
-            weight, bias = wsfeat[i]
+            weight, bias, angle = wsfeat[i]
             out_weights.append(self.encode_tensor(weight))
             out_biases.append(self.encode_tensor(bias))
-        return WeightSpaceFeatures(out_weights, out_biases)
+        return WeightSpaceFeatures(out_weights, out_biases, angle)
 
     def __repr__(self):
         return f"GaussianFourierFeatureTransform(in_channels={self.in_channels}, mapping_size={self._mapping_size}, scale={self.scale})"
@@ -148,7 +148,7 @@ class LearnedPosEmbedding(nn.Module):
     def forward(self, wsfeat: WeightSpaceFeatures) -> WeightSpaceFeatures:
         out_weights, out_biases = [], []
         for i in range(len(self.network_spec)):
-            weight, bias = wsfeat[i]
+            weight, bias, angle = wsfeat[i]
             filter_dims = (None,) * (weight.ndim - 4
                                     )  # conv weight filter dims.
             weight = weight + self.weight_emb.weight[i][(None, Ellipsis, None,
@@ -163,7 +163,7 @@ class LearnedPosEmbedding(nn.Module):
                 bias = bias + self.out_bias_arrange(self.out_emb.weight)
             out_weights.append(weight)
             out_biases.append(bias)
-        return WeightSpaceFeatures(tuple(out_weights), tuple(out_biases))
+        return WeightSpaceFeatures(tuple(out_weights), tuple(out_biases), angle)
 
     def __repr__(self):
         return f"LearnedPosEmbedding(channels={self.channels})"

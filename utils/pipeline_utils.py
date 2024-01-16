@@ -24,7 +24,7 @@ from torchvision.models import regnet_y_800mf
 from loaders import mnist_classification_dataset, mnist_stylize_dataset, mnist_rotate_dataset
 from models import mnist_classification_model, mnist_stylize_model, mnist_rotate_model
 from networks.dwsnets_networks import DWSModelForClassification, DWSModel
-from networks.nfn_networks import TransferNet
+from networks.nfn_networks import TransferNet, TransferRotateNet
 from trainers import mnist_classification_trainer, mnist_stylize_trainer, mnist_rotate_trainer
 from visualizers import scalar_visualizer, image_visualizer
 
@@ -246,6 +246,7 @@ def create_network(network_configs, state_dict_path):
         'dwsnet_classification': DWSModelForClassification,
         'dwsnet': DWSModel,
         'transfer_net': TransferNet,
+        'transfer_rotate_net': TransferRotateNet,
     }
 
     network_name = network_configs['network_name']

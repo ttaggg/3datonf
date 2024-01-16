@@ -50,11 +50,17 @@ class SimpleLayerNorm(nn.Module):
         wsfeat = shape_wsfeat_symmetry(wsfeat, self.network_spec)
         out_weights, out_biases = [], []
         for i in range(len(self.network_spec)):
-            weight, bias = wsfeat[i]
+            weight, bias, _ = wsfeat[i]
             out_weights.append(self.w_norms[i](weight))
             out_biases.append(self.v_norms[i](bias))
+
+        out_angle = None
+        if wsfeat.angle is not None:
+            out_angle = wsfeat.angle
+
         return unshape_wsfeat_symmetry(
-            WeightSpaceFeatures(out_weights, out_biases), self.network_spec)
+            WeightSpaceFeatures(out_weights, out_biases, out_angle),
+            self.network_spec)
 
     def __repr__(self):
         return f"SimpleLayerNorm(channels={self.channels})"
