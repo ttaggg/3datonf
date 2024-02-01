@@ -7,7 +7,7 @@ import numpy as np
 import torch
 from absl import logging
 
-from loaders.mnist_rotate_dataset import Batch
+from loaders.mnist_rotate_dataset import Batch # that's a bug though, make a parent class for all trainers
 from utils import trainer_utils as tu
 
 
@@ -59,11 +59,11 @@ class Trainer(abc.ABC):
                 inputs[key] = value.to(self._device)
         elif isinstance(inputs, Batch):
             inputs.to(self._device)
-        elif isinstance(inputs, (tuple, list)):
+        # elif isinstance(inputs, (tuple, list)):
             # TODO(oleg): that's not good
-            for x in inputs:
-                for y in x:
-                    y.to(self._device)
+            # for x in inputs:
+                # for y in x:
+                    # y.to(self._device)
         else:
             inputs.to(self._device)
         return inputs
@@ -95,7 +95,7 @@ class Trainer(abc.ABC):
         if lr_scheduler_conf['name'] == 'reduce_on_plateau':
             # NOTE(oleg): StepLR and ReduceLROnPlateau have different API :(
             target_metric = lr_scheduler_conf.get('target_metric', 'loss')
-            self._lr_scheduler.step(np.mean(metrics[target_metric]))
+            self._lr_scheduler.step(metrics[target_metric])
         else:
             self._lr_scheduler.step()
 

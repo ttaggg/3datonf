@@ -22,10 +22,11 @@ import torch
 from torchvision.models import regnet_y_800mf
 
 from loaders import mnist_classification_dataset, mnist_stylize_dataset, mnist_rotate_dataset
-from models import mnist_classification_model, mnist_stylize_model, mnist_rotate_model
+from models import mnist_classification_model, mnist_stylize_model, mnist_rotate_model, mnist_regress_model
 from networks.dwsnets_networks import DWSModelForClassification, DWSModel
-from networks.nfn_networks import TransferNet, TransferRotateNet
-from trainers import mnist_classification_trainer, mnist_stylize_trainer, mnist_rotate_trainer
+from networks.nfn_networks import TransferNet, TransferRotateNet, NfnSiamese, TransferRotateMergeNet
+from networks.autoencoder import AutoEncoder
+from trainers import mnist_classification_trainer, mnist_stylize_trainer, mnist_rotate_trainer, mnist_regress_trainer
 from visualizers import scalar_visualizer, image_visualizer
 
 
@@ -132,6 +133,9 @@ def create_trainer(config, model, visualizers, output_dir, device):
     elif trainer_name == 'mnist_rotate_trainer':
         return mnist_rotate_trainer.MnistTrainer(config, model, output_dir,
                                                  device, visualizers)
+    elif trainer_name == 'mnist_regress_trainer':
+        return mnist_regress_trainer.MnistTrainer(config, model, output_dir,
+                                                  device, visualizers)
     raise ValueError(f'Unknown trainer was given: {trainer_name}.')
 
 
@@ -178,7 +182,7 @@ def create_loader(data_config, model_config, device):
     kwargs = {}
     num_workers = data_config.pop('num_workers', 0)
     if num_workers > 0:
-        kwargs = {'pin_memory': False, 'multiprocessing_context': 'fork'}
+        kwargs = {'pin_memory': True, 'multiprocessing_context': None}
 
     if task_name == 'mnist_classification':
 
@@ -192,7 +196,7 @@ def create_loader(data_config, model_config, device):
             data_config, device)
         train_loader, val_loader, test_loader = factory.split()
 
-    elif task_name == 'mnist_rotate':
+    elif task_name == 'mnist_rotate' or task_name == 'mnist_regress':
 
         factory = mnist_rotate_dataset.MnistInrDatasetFactory(
             data_config, device)
@@ -247,6 +251,9 @@ def create_network(network_configs, state_dict_path):
         'dwsnet': DWSModel,
         'transfer_net': TransferNet,
         'transfer_rotate_net': TransferRotateNet,
+        'transfer_rotate_merge_net': TransferRotateMergeNet,
+        'autoencoder': AutoEncoder,
+        'nfn_siamese': NfnSiamese,
     }
 
     network_name = network_configs['network_name']
@@ -255,7 +262,12 @@ def create_network(network_configs, state_dict_path):
     if network_name not in networks_dict:
         raise ValueError(f'Unknown network name is given: {network_name}.')
 
-    network = networks_dict[network_name](**network_params).float()
+    if network_name != 'nfn_siamese':
+        network = networks_dict[network_name](**network_params).float()
+    else:
+        model = TransferRotateNet(**network_params).float()
+        network = NfnSiamese(model)
+
     init_step = 0
 
     # NOTE(oleg): this logic is quite bad and should be changed.
@@ -306,6 +318,11 @@ def create_model(model_configs, device, weights=None):
                                                        network=network,
                                                        init_step=init_step,
                                                        device=device)
+    elif model_configs['model_name'] == 'mnist_regress_model':
+        model = mnist_regress_model.MnistInrRegressModel(config=model_configs,
+                                                         network=network,
+                                                         init_step=init_step,
+                                                         device=device)
     else:
         raise ValueError(f'Unknown model name: {model_configs["model_name"]}.')
 

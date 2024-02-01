@@ -60,15 +60,19 @@ def get_lr_scheduler(optimizer, config):
         return torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, **params)
 
 
-def get_learning_rate(lr_scheduler):
+def get_learning_rate(lr_scheduler, config=None):
 
     if lr_scheduler is None:
         logging.info('LR scheduler was not set.')
+        if config is not None:
+            return config['optimizer']['learning_rate']
         return np.nan
 
     if lr_scheduler.__class__.__name__ == 'ReduceLROnPlateau':
         if hasattr(lr_scheduler, '_last_lr'):
             return lr_scheduler._last_lr
+        if config is not None:
+            return config['optimizer']['learning_rate']
         logging.info(
             'LR scheduler did not make any steps, LR is not updated yet,'
             ' cannot log LR yet.')

@@ -80,6 +80,84 @@ class TransferNet(nn.Module):
         return self.hnet(params)
 
 
+def reduction(x: torch.tensor, dim=1, keepdim=False):
+    x, _ = torch.max(x, dim=dim, keepdim=keepdim)
+    return x
+
+def pool(weights, biases):
+    
+    weights = [w.permute(0, 2, 3, 1) for w in weights] # !!! change
+    biases = [b.permute(0, 2, 1) for b in biases] # !!! change
+    
+    first_w, last_w = weights[0], weights[-1]
+    pooled_first_w = first_w.permute(0, 2, 1, 3).flatten(start_dim=2)
+    pooled_last_w = last_w.flatten(start_dim=2)
+    pooled_first_w = reduction(pooled_first_w, dim=1)
+    pooled_last_w = reduction(pooled_last_w, dim=1)
+    last_b = biases[-1]
+    pooled_last_b = last_b.flatten(start_dim=1)
+    pooled_weights = torch.cat(
+            [
+                reduction(w.permute(0, 3, 1, 2).flatten(start_dim=2),
+                                dim=2) for w in weights[1:-1]
+            ],
+            dim=-1,
+    )
+    pooled_weights = torch.cat(
+            (pooled_weights, pooled_first_w, pooled_last_w), dim=-1)
+    pooled_biases = torch.cat(
+            [reduction(b, dim=1) for b in biases[:-1]],
+            dim=-1)
+
+    pooled_biases = torch.cat((pooled_biases, pooled_last_b), dim=-1)
+
+    pooled_all = torch.cat(
+            [pooled_weights, pooled_biases], dim=-1
+        )
+    return pooled_all
+
+
+class Batch(NamedTuple):
+    weights: Tuple
+    biases: Tuple
+    angle_encoded: torch.Tensor
+    
+class NfnSiamese(nn.Module):
+
+    def __init__(self, model):
+        super().__init__()
+        self._model = model
+        self._classifier = nn.Sequential(
+            nn.Linear(136, 128),
+            nn.LeakyReLU(),
+            nn.BatchNorm1d(128),
+            nn.Linear(128, 64),
+            nn.LeakyReLU(),
+            nn.BatchNorm1d(64),
+            nn.Linear(64, 1),
+        )
+
+    def forward(self, lhs_weights, lhs_biases, rhs_weights, rhs_biases, angle_encoded):
+
+        # We just set dummy angle for pretraining.
+        dummy_angle = torch.zeros_like(angle_encoded)
+        lhs_params = Batch(lhs_weights, lhs_biases, dummy_angle)
+        rhs_params = Batch(rhs_weights, rhs_biases, dummy_angle)
+
+        lhs = self._model(lhs_params)
+        rhs = self._model(rhs_params)
+        
+        lhs_out = pool(lhs.weights, lhs.biases)
+        rhs_out = pool(rhs.weights, rhs.biases)
+        
+        combined = torch.cat([lhs_out, rhs_out], dim=-1)
+        combined = combined.flatten(start_dim=1)
+        
+        angle = self._classifier(combined)
+
+        return angle
+
+
 class TransferRotateNet(nn.Module):
 
     def __init__(
