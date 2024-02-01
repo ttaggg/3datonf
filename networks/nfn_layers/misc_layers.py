@@ -16,7 +16,7 @@ class FlattenWeights(nn.Module):
         wsfeat = shape_wsfeat_symmetry(wsfeat, self.network_spec)
         outs = []
         for i in range(len(self.network_spec)):
-            w, b = wsfeat[i]
+            w, b, _ = wsfeat[i]
             outs.append(torch.flatten(w, start_dim=2).transpose(1, 2))
             outs.append(b.transpose(1, 2))
         return torch.cat(outs, dim=1)  # (B, N, C)

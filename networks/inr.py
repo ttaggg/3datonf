@@ -1,14 +1,10 @@
 """Copied from DWSNets and NFN."""
 
-import math
-from typing import Optional, List, Tuple, Union
-
 import functorch
 import numpy as np
 import torch
 import torch.nn.functional as F
 from torch import nn
-
 
 class Sine(nn.Module):
 
@@ -55,7 +51,7 @@ class INR(nn.Module):
         self.seq = nn.Sequential(*self.layers)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        return self.seq(x)# + 0.5  # TODO(oleg): why +0.5 though
+        return self.seq(x)  # + 0.5  # TODO(oleg): why +0.5 though
 
 
 def make_coordinates(shape, bs, coord_range=(-1, 1)):
@@ -111,5 +107,5 @@ class InrToImage:
 
         image = self._siren_convert(params)
         image = torch.clip(image, -1, 1)
-        image =  (image + 1) / 2
+        image = (image + 1) / 2
         return image
