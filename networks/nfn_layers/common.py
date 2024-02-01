@@ -90,9 +90,8 @@ class WeightSpaceFeatures(collections.abc.Sequence):
     def map(self, func):
         """Applies func to each weight and bias tensor."""
         return WeightSpaceFeatures(tuple(func(w) for w in self.weights),
-                                    tuple(func(b) for b in self.biases),
-                                    self.angle)
-
+                                   tuple(func(b) for b in self.biases),
+                                   self.angle)
 
     def to(self, device):
         """Moves all tensors to device."""

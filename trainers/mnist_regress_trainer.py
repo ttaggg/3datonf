@@ -46,7 +46,8 @@ class MnistTrainer(base_trainer.Trainer):
             metrics_dict['mae_deg'].append(
                 mae_deg.mean().detach().cpu().numpy())
 
-        current_lr = trainer_utils.get_learning_rate(self._lr_scheduler, self._config)
+        current_lr = trainer_utils.get_learning_rate(self._lr_scheduler,
+                                                     self._config)
         metrics_dict['lr'] = [current_lr]
 
         for metric_name, values in metrics_dict.items():

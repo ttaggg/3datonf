@@ -85,11 +85,12 @@ def reduction(x: torch.tensor, dim=1, keepdim=False):
     x, _ = torch.max(x, dim=dim, keepdim=keepdim)
     return x
 
+
 def pool(weights, biases):
-    
-    weights = [w.permute(0, 2, 3, 1) for w in weights] # !!! change
-    biases = [b.permute(0, 2, 1) for b in biases] # !!! change
-    
+
+    weights = [w.permute(0, 2, 3, 1) for w in weights]  # !!! change
+    biases = [b.permute(0, 2, 1) for b in biases]  # !!! change
+
     first_w, last_w = weights[0], weights[-1]
     pooled_first_w = first_w.permute(0, 2, 1, 3).flatten(start_dim=2)
     pooled_last_w = last_w.flatten(start_dim=2)
@@ -98,23 +99,20 @@ def pool(weights, biases):
     last_b = biases[-1]
     pooled_last_b = last_b.flatten(start_dim=1)
     pooled_weights = torch.cat(
-            [
-                reduction(w.permute(0, 3, 1, 2).flatten(start_dim=2),
-                                dim=2) for w in weights[1:-1]
-            ],
-            dim=-1,
+        [
+            reduction(w.permute(0, 3, 1, 2).flatten(start_dim=2), dim=2)
+            for w in weights[1:-1]
+        ],
+        dim=-1,
     )
-    pooled_weights = torch.cat(
-            (pooled_weights, pooled_first_w, pooled_last_w), dim=-1)
-    pooled_biases = torch.cat(
-            [reduction(b, dim=1) for b in biases[:-1]],
-            dim=-1)
+    pooled_weights = torch.cat((pooled_weights, pooled_first_w, pooled_last_w),
+                               dim=-1)
+    pooled_biases = torch.cat([reduction(b, dim=1) for b in biases[:-1]],
+                              dim=-1)
 
     pooled_biases = torch.cat((pooled_biases, pooled_last_b), dim=-1)
 
-    pooled_all = torch.cat(
-            [pooled_weights, pooled_biases], dim=-1
-        )
+    pooled_all = torch.cat([pooled_weights, pooled_biases], dim=-1)
     return pooled_all
 
 
@@ -122,7 +120,8 @@ class Batch(NamedTuple):
     weights: Tuple
     biases: Tuple
     angle_encoded: torch.Tensor
-    
+
+
 class NfnSiamese(nn.Module):
 
     def __init__(self, model):
@@ -138,7 +137,8 @@ class NfnSiamese(nn.Module):
             nn.Linear(64, 1),
         )
 
-    def forward(self, lhs_weights, lhs_biases, rhs_weights, rhs_biases, angle_encoded):
+    def forward(self, lhs_weights, lhs_biases, rhs_weights, rhs_biases,
+                angle_encoded):
 
         # We just set dummy angle for pretraining.
         dummy_angle = torch.zeros_like(angle_encoded)
@@ -147,13 +147,13 @@ class NfnSiamese(nn.Module):
 
         lhs = self._model(lhs_params)
         rhs = self._model(rhs_params)
-        
+
         lhs_out = pool(lhs.weights, lhs.biases)
         rhs_out = pool(rhs.weights, rhs.biases)
-        
+
         combined = torch.cat([lhs_out, rhs_out], dim=-1)
         combined = combined.flatten(start_dim=1)
-        
+
         angle = self._classifier(combined)
 
         return angle
@@ -207,17 +207,21 @@ class TransferRotateNet(nn.Module):
                 layers.append(SimpleLayerNorm(network_spec, hidden_chan))
             layers.append(TupleOp(nn.ReLU()))
         layers.append(
-            HNPLinearAngle(network_spec, in_channels=hidden_chan, out_channels=1)) # !!! DEBUG
+            HNPLinearAngle(network_spec,
+                           in_channels=hidden_chan,
+                           out_channels=1))  # !!! DEBUG
 
         layers.append(LearnedScale(network_spec, out_scale))
         self.hnet = nn.Sequential(*layers)
 
     def forward(self, batch):
-        params = WeightSpaceFeatures(batch.weights, batch.biases, batch.angle_encoded)
+        params = WeightSpaceFeatures(batch.weights, batch.biases,
+                                     batch.angle_encoded)
         return self.hnet(params)
 
 
 class TransferRotateMergeNet(nn.Module):
+
     def __init__(
         self,
         weight_shapes,
@@ -263,7 +267,9 @@ class TransferRotateMergeNet(nn.Module):
                 layers.append(SimpleLayerNorm(network_spec, hidden_chan))
             layers.append(TupleOp(nn.ReLU()))
         layers.append(
-            HNPLinearAngleMerge(network_spec, in_channels=hidden_chan, out_channels=1))
+            HNPLinearAngleMerge(network_spec,
+                                in_channels=hidden_chan,
+                                out_channels=1))
 
         layers.append(LearnedScale(network_spec, out_scale))
         self.hnet = nn.Sequential(*layers)

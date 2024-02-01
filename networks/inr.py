@@ -6,6 +6,7 @@ import torch
 import torch.nn.functional as F
 from torch import nn
 
+
 class Sine(nn.Module):
 
     def __init__(self, w0=1.0):

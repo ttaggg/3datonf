@@ -23,7 +23,7 @@ class MeanSquareError(nn.Module):
     #     for pr, tr in zip(prediction, target):
     #         loss += self._mse_loss(pr, tr)
     #     return loss.mean()
-    
+
 
 class MnistInrRotateModel(base_model.BaseModel):
     """MNIST model class."""

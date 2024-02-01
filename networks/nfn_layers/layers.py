@@ -103,7 +103,8 @@ class Pointwise(nn.Module):
             out_weights.append(self.weight_maps[i](weight))
             out_biases.append(self.bias_maps[i](bias))
         return unshape_wsfeat_symmetry(
-            WeightSpaceFeatures(out_weights, out_biases, angle), self.network_spec)
+            WeightSpaceFeatures(out_weights, out_biases, angle),
+            self.network_spec)
 
     def __repr__(self):
         return f"Pointwise(in_channels={self.in_channels}, out_channels={self.out_channels})"
@@ -625,7 +626,7 @@ class HNPLinearAngleMerge(nn.Module):
                 u3 = torch.squeeze(u3, -3)
                 u = torch.cat([u, u3], dim=-1)
                 u = self._angle_emb_merge_bias[i](u)
-                
+
             else:
                 z1 = getattr(self,
                              f"layer_{i}")(weight)  # (B, C_out, nrow, ncol)
@@ -661,7 +662,7 @@ class HNPLinearAngleMerge(nn.Module):
                 u3 = torch.squeeze(u3, -3)
                 u = torch.cat([u, u3], dim=-1)
                 u = self._angle_emb_merge_bias[i](u)
-                
+
             out_weights.append(z)
             out_biases.append(u)
 
@@ -898,7 +899,7 @@ class HNPLinearAngleSum(nn.Module):
                 z = z1 + z2 + z3 + z4
 
                 z5 = self._angle_emb[i](angle)
-                
+
                 z5 = torch.reshape(z5, (z.shape[0], z.shape[1], 32, 1))
                 z = z + z5
 

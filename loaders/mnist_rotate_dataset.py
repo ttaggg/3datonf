@@ -213,7 +213,8 @@ class MnistInrClassificationDataset(base_dataset.Dataset):
 
         angle = np.array(np.deg2rad(angle_out - angle_in), dtype=np.float32)
         angle = np.expand_dims(angle, 0)
-        angle = torch.tensor([np.sin(angle), np.cos(angle)], device=self._device).T
+        angle = torch.tensor([np.sin(angle), np.cos(angle)],
+                             device=self._device).T
 
         # TODO(oleg): instead of giving original weights, pass means
         # and std and re-create them when necessary.
