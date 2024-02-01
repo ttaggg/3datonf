@@ -1,4 +1,4 @@
-from networks.nfn_layers.layers import HNPLinear, NPLinear, HNPLinearAngle, HNPLinearAngleMerge, NPPool, HNPPool, Pointwise, NPAttention
+from networks.nfn_layers.layers import HNPLinear, NPLinear, HNPLinearAngleSum, HNPLinearAngleMerge, NPPool, HNPPool, Pointwise, NPAttention
 from networks.nfn_layers.layers import ChannelLinear
 from networks.nfn_layers.misc_layers import FlattenWeights, UnflattenWeights, TupleOp, ResBlock, StatFeaturizer, LearnedScale
 from networks.nfn_layers.misc_layers import CrossAttnDecoder, CrossAttnEncoder
