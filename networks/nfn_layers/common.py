@@ -65,7 +65,7 @@ class WeightSpaceFeatures(collections.abc.Sequence):
 
         out_angle = None
         if self.angle is not None and other.angle is not None:
-            raise NotImplementedError  # hmmm
+            out_angle = self.angle
 
         return WeightSpaceFeatures(out_weights, out_biases, out_angle)
 
@@ -76,7 +76,7 @@ class WeightSpaceFeatures(collections.abc.Sequence):
             biases = tuple(b1 * b2 for b1, b2 in zip(self.biases, other.biases))
 
             if self.angle is not None and other.angle is not None:
-                raise NotImplementedError  # hmmm
+                out_angle = self.angle
 
             return WeightSpaceFeatures(weights, biases, out_angle)
         return self.map(lambda x: x * other)

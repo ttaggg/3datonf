@@ -3,10 +3,10 @@
 import glob
 import os
 import re
-from itertools import combinations
-from typing import NamedTuple, Tuple, Union
+from typing import NamedTuple, Tuple
 
 import flags
+import cv2
 import numpy as np
 import torch
 
@@ -15,7 +15,6 @@ from PIL import Image
 from sklearn.model_selection import train_test_split
 
 from loaders import base_dataset
-from networks.inr import InrToImage
 
 FLAGS = flags.FLAGS
 
@@ -38,14 +37,15 @@ def _preprocess_weights_biases(state_dict):
 class Batch(NamedTuple):
     """Modified from DWSNet."""
     weights: Tuple
-    ori_weights: Tuple
     biases: Tuple
-    ori_biases: Tuple
-    weights_out: Tuple
-    biases_out: Tuple
-    angle: np.ndarray
-    image_in: np.ndarray
-    image_out: np.ndarray
+    angle_delta: torch.Tensor
+    angle_delta_rad: torch.Tensor
+    transformation: torch.Tensor
+    image_out: torch.Tensor
+    wm: Tuple
+    ws: Tuple
+    bm: Tuple
+    bs: Tuple
 
     def _assert_same_len(self):
         assert len(set([len(t) for t in self])) == 1
@@ -57,14 +57,15 @@ class Batch(NamedTuple):
         """move batch to device"""
         return self.__class__(
             weights=tuple(w.to(device) for w in self.weights),
-            ori_weights=tuple(w.to(device) for w in self.ori_weights),
             biases=tuple(w.to(device) for w in self.biases),
-            ori_biases=tuple(w.to(device) for w in self.ori_biases),
-            weights_out=tuple(w.to(device) for w in self.weights_out),
-            biases_out=tuple(w.to(device) for w in self.biases_out),
-            angle=self.angle.to(device),
-            image_in=self.image_in.to(device),
-            image_out=self.image_out.to(device))
+            angle_delta=self.angle_delta.to(device),
+            angle_delta_rad=self.angle_delta_rad.to(device),
+            transformation=self.transformation.to(device),
+            image_out=self.image_out.to(device),
+            wm=tuple(k.to(device) for k in self.wm),
+            ws=tuple(k.to(device) for k in self.ws),
+            bm=tuple(k.to(device) for k in self.bm),
+            bs=tuple(k.to(device) for k in self.bs))
 
     def __len__(self):
         return len(self.weights[0])
@@ -106,11 +107,8 @@ class MnistInrDatasetFactory:
 
             assert len(images) == len(models)
 
-            for l, r in combinations(range(len(models)), 2):
-                train_val_test_set.append((models[l], images[l], angles[l],
-                                           models[r], images[r], angles[r]))
-                train_val_test_set.append((models[r], images[r], angles[r],
-                                           models[l], images[l], angles[l]))
+            for l, model in enumerate(models):
+                train_val_test_set.append([models[l], images[l], angles[l]])
 
         train_val_set, test_set = train_test_split(
             train_val_test_set,
@@ -152,15 +150,38 @@ class MnistInrDatasetFactory:
                                                       device='cpu')
 
         train_loader = torch.utils.data.DataLoader(dataset=train_dataset,
-                                                   batch_size=32,
+                                                   batch_size=1,
                                                    shuffle=True,
                                                    num_workers=0)
 
-        batch: Batch = next(iter(train_loader))
-        weights_mean = [w.mean(0).to(self._device) for w in batch.weights]
-        weights_std = [w.std(0).to(self._device) for w in batch.weights]
-        biases_mean = [w.mean(0).to(self._device) for w in batch.biases]
-        biases_std = [w.std(0).to(self._device) for w in batch.biases]
+        batch = next(iter(train_loader))
+        weights_x = [x for x in batch.weights]
+        weights_x_2 = [x * x for x in batch.weights]
+        biases_x = [x for x in batch.biases]
+        biases_x_2 = [x * x for x in batch.biases]
+
+        for i, batch in enumerate(train_loader):
+            for j, _ in enumerate(weights_x):
+                weights_x[j] += batch.weights[j]
+                weights_x_2[j] += batch.weights[j] * batch.weights[j]
+            for k, _ in enumerate(biases_x):
+                biases_x[k] += batch.biases[k]
+                biases_x_2[k] += batch.biases[k] * batch.biases[k]
+
+            # if i == 1:
+                # break
+
+        num_samples = len(train_loader)
+        weights_mean = [(x / num_samples).squeeze(0) for x in weights_x]
+        biases_mean = [(x / num_samples).squeeze(0) for x in biases_x]
+        weights_std = [
+            torch.sqrt((x_2 / num_samples) - (x / num_samples)**2).squeeze(0)
+            for x, x_2 in zip(weights_x, weights_x_2)
+        ]
+        biases_std = [
+            torch.sqrt((x_2 / num_samples) - (x / num_samples)**2).squeeze(0)
+            for x, x_2 in zip(biases_x, biases_x_2)
+        ]
 
         return {
             "weights": {
@@ -173,6 +194,23 @@ class MnistInrDatasetFactory:
             },
         }
 
+def _nerf_encode(x, depth=1):
+    
+    outputs = []
+    for i in range(depth):
+        outputs.append((2**i) * torch.pi * torch.sin(x))
+        outputs.append((2**i) * torch.pi * torch.cos(x))
+
+    outputs = torch.cat(outputs, dim=-1)
+    
+    return outputs
+
+def getTranslationMatrix2D(dx, dy):
+    """
+    Returns a numpy affine transformation matrix for a 2D translation of
+    (dx, dy)
+    """
+    return np.matrix([[1, 0, dx], [0, 1, dy], [0, 0, 1]])
 
 class MnistInrClassificationDataset(base_dataset.Dataset):
     """Custom dataset for MNIST-INRs data."""
@@ -180,54 +218,68 @@ class MnistInrClassificationDataset(base_dataset.Dataset):
     def __init__(self, dataset, statistics, is_training, config, device):
         super().__init__(dataset, is_training)
         self._samples = dataset
-        self._device = device
         self._statistics = statistics
+        self._device = device
 
         logging.info(f'Dataset size: {len(self._samples)}, '
                      f'device: {device}, training: {is_training}.')
 
-        self._inr_to_image = InrToImage((28, 28, 1), device)
-
     @torch.no_grad()
-    def __getitem__(self, idx):
+    def __getitem__(self, idx, angle_input=None, trans_input=None):
 
-        model_in, image_in, angle_in, model_out, image_out, angle_out = self._samples[
-            idx]
+        model_in, image_in, _ = self._samples[idx]
 
-        state_dict_in = torch.load(model_in, map_location=self._device)
+        state_dict_in = torch.load(model_in, map_location='cpu')
         weights_in, biases_in = _preprocess_weights_biases(state_dict_in)
 
-        state_dict_out = torch.load(model_out, map_location=self._device)
-        weights_out, biases_out = _preprocess_weights_biases(state_dict_out)
+        if angle_input is None:
+            angle_delta = np.random.choice(list(range(-90, 90, 5)))
+        else:
+            angle_delta = angle_input
 
-        image_in = self._inr_to_image(weights_in, biases_in)
-        image_in = image_in.squeeze(0)
-        image_out = self._inr_to_image(weights_out, biases_out)
-        image_out = image_out.squeeze(0)
+        if trans_input is None:
+            trans = np.random.uniform(low=-0.25, high=0.25, size=(2,))
+        else:
+            trans = trans_input
 
-        ori_weights_in = weights_in
-        ori_biases_in = biases_in
+        # Rotation and Translation
+        T = getTranslationMatrix2D(14*trans[0], 14*trans[1])
+        R = np.vstack([cv2.getRotationMatrix2D((14, 14), angle_delta, 1.0), [0, 0, 1]])
+        affine_mat = (np.matrix(T) * np.matrix(R))[0:2, :]
+
+        image_in = np.array(Image.open(image_in).convert('L'),
+                            dtype=np.float32) / 255
+        image_out = cv2.warpAffine(image_in, affine_mat, (28, 28))
+        image_out = torch.tensor(image_out).unsqueeze(0)
+
+        angle_delta = torch.tensor(angle_delta).unsqueeze(0)
+        angle_delta_rad = torch.deg2rad(angle_delta)
+
+        transformation = torch.tensor([angle_delta_rad, trans[0], trans[1]], dtype=torch.float32).reshape((1, -1))
+        transformation = _nerf_encode(transformation, depth=1)
+
         if self._statistics is not None:
             weights_in, biases_in = self._normalize_weights_biases(
                 weights_in, biases_in)
 
-        angle = np.array(np.deg2rad(angle_out - angle_in), dtype=np.float32)
-        angle = np.expand_dims(angle, 0)
-        angle = torch.tensor([np.sin(angle), np.cos(angle)],
-                             device=self._device).T
+        wm = ws = bm = bs = np.array([])
+        if self._statistics is not None:
+            wm = self._statistics["weights"]["mean"]
+            ws = self._statistics["weights"]["std"]
+            bm = self._statistics["biases"]["mean"]
+            bs = self._statistics["biases"]["std"]
 
-        # TODO(oleg): instead of giving original weights, pass means
-        # and std and re-create them when necessary.
-        # Also make metadata instead of huge tuple with everything.
-        sample = Batch(weights=weights_in,
-                       ori_weights=ori_weights_in,
-                       biases=biases_in,
-                       ori_biases=ori_biases_in,
-                       weights_out=weights_out,
-                       biases_out=biases_out,
-                       angle=angle,
-                       image_in=image_in,
-                       image_out=image_out)
+        sample = Batch(
+            weights=weights_in,
+            biases=biases_in,
+            angle_delta=angle_delta,
+            angle_delta_rad=angle_delta_rad,
+            transformation=transformation,
+            image_out=image_out,
+            wm=wm,
+            ws=ws,
+            bm=bm,
+            bs=bs)
 
         return sample
 
@@ -237,10 +289,8 @@ class MnistInrClassificationDataset(base_dataset.Dataset):
         bm = self._statistics["biases"]["mean"]
         bs = self._statistics["biases"]["std"]
 
-        # weights = tuple((w - m) / s for w, m, s in zip(weights, wm, ws))
-        # biases = tuple((w - m) / s for w, m, s in zip(biases, bm, bs))
-        weights = tuple((w - m) for w, m, s in zip(weights, wm, ws))
-        biases = tuple((w - m) for w, m, s in zip(biases, bm, bs))
+        weights = tuple((w - m) / s for w, m, s in zip(weights, wm, ws))
+        biases = tuple((w - m) / s for w, m, s in zip(biases, bm, bs))
 
         return weights, biases
 

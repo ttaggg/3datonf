@@ -18,12 +18,6 @@ class MeanSquareError(nn.Module):
         loss = self._mse_loss(prediction, target)
         return loss.mean()
 
-    # def forward(self, target, prediction):
-    #     loss = 0
-    #     for pr, tr in zip(prediction, target):
-    #         loss += self._mse_loss(pr, tr)
-    #     return loss.mean()
-
 
 class MnistInrRotateModel(base_model.BaseModel):
     """MNIST model class."""
@@ -47,22 +41,30 @@ class MnistInrRotateModel(base_model.BaseModel):
         loss = self._loss_fn(inputs, outputs)
         return loss
 
+    def _unnormalize_weights_biases(self, weights, biases, wm, ws, bm, bs):
+        weights = tuple(((w * s) + m) for w, m, s in zip(weights, wm, ws))
+        biases = tuple(((w * s) + m) for w, m, s in zip(biases, bm, bs))
+        return weights, biases
+
     def forward(self, inputs, evaluation=False):
 
         output = self.model_outputs(inputs)
         delta_weights, delta_biases = output.weights, output.biases
-        new_weights = [
-            wd + w for wd, w in zip(delta_weights, inputs.ori_weights)
-        ]
-        new_biases = [bd + b for bd, b in zip(delta_biases, inputs.ori_biases)]
 
+        new_weights = [wd + w for wd, w in zip(delta_weights, inputs.weights)]
+        new_biases = [bd + b for bd, b in zip(delta_biases, inputs.biases)]
+
+        new_weights, new_biases = self._unnormalize_weights_biases(
+            new_weights, new_biases, inputs.wm, inputs.ws, inputs.bm, inputs.bs)
         new_image = self._inr_to_image(new_weights, new_biases)
 
+        weights_in, biases_in = self._unnormalize_weights_biases(
+            inputs.weights, inputs.biases, inputs.wm, inputs.ws, inputs.bm,
+            inputs.bs)
+        image_in = self._inr_to_image(weights_in, biases_in)
+
         loss = self.compute_loss(inputs.image_out, new_image)
-        # loss_w = self.compute_loss(inputs.weights_out, new_weights)
-        # loss_b = self.compute_loss(inputs.biases_out, new_biases)
-        # loss = loss_w + loss_b
 
         if evaluation:
-            return loss, new_image
+            return loss, (image_in, inputs.image_out, new_image)
         return loss

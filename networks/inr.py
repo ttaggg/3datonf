@@ -84,6 +84,7 @@ class InrToImage:
 
     def __init__(self, image_size, device):
         self._image_size = image_size
+        self._device = device
         self._siren_convert = get_batch_siren(n_layers=3,
                                               in_dim=2,
                                               up_scale=16,
@@ -104,8 +105,9 @@ class InrToImage:
 
             params.append(w)
             params.append(b)
-        params = tuple(params)
 
+        params = tuple(params)
+        
         image = self._siren_convert(params)
         image = torch.clip(image, -1, 1)
         image = (image + 1) / 2

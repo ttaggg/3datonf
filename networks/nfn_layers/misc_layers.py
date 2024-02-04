@@ -1,6 +1,5 @@
 import numpy as np
 import torch
-import torch.nn.functional as F
 from torch import nn
 from networks.nfn_layers.layer_utils import shape_wsfeat_symmetry
 from networks.nfn_layers.common import WeightSpaceFeatures, NetworkSpec
@@ -71,50 +70,7 @@ class LearnedScale(nn.Module):
         for i, (weight, bias) in enumerate(zip(wsfeat.weights, wsfeat.biases)):
             out_weights.append(weight * self.weight_scales[i])
             out_biases.append(bias * self.bias_scales[i])
-        return WeightSpaceFeatures(out_weights, out_biases)
-
-
-class ResBlock(nn.Module):
-
-    def __init__(self, base_layer, activation, dropout, norm):
-        super().__init__()
-        self.base_layer = base_layer
-        self.activation = activation
-        self.dropout = None
-        if dropout > 0:
-            self.dropout = TupleOp(nn.Dropout(dropout))
-        self.norm = norm
-
-    def forward(self, x: WeightSpaceFeatures) -> WeightSpaceFeatures:
-        res = self.activation(self.base_layer(self.norm(x)))
-        if self.dropout is not None:
-            res = self.dropout(res)
-        return x + res
-
-
-class StatFeaturizer(nn.Module):
-
-    def forward(self, wsfeat: WeightSpaceFeatures) -> torch.Tensor:
-        out = []
-        for (weight, bias) in wsfeat:
-            out.append(self.compute_stats(weight))
-            out.append(self.compute_stats(bias))
-        return torch.cat(out, dim=-1)
-
-    def compute_stats(self, tensor: torch.Tensor) -> torch.Tensor:
-        """Computes the statistics of the given tensor."""
-        tensor = torch.flatten(tensor, start_dim=2)  # (B, C, H*W)
-        mean = tensor.mean(-1)  # (B, C)
-        var = tensor.var(-1)  # (B, C)
-        q = torch.tensor([0., 0.25, 0.5, 0.75, 1.]).to(tensor.device)
-        quantiles = torch.quantile(tensor, q, dim=-1)  # (5, B, C)
-        return torch.stack([mean, var, *quantiles], dim=-1)  # (B, C, 7)
-
-    @staticmethod
-    def get_num_outs(network_spec):
-        """Returns the number of outputs of the StatFeaturizer layer."""
-        return 2 * len(network_spec) * 7
-
+        return WeightSpaceFeatures(out_weights, out_biases, wsfeat.angle)
 
 class TupleOp(nn.Module):
 
@@ -135,29 +91,3 @@ class TupleOp(nn.Module):
     def __repr__(self):
         return f"TupleOp({self.op})"
 
-
-class CrossAttnEncoder(nn.Module):
-
-    def __init__(self, network_spec, channels, num_latents):
-        super().__init__()
-        self.embeddings = nn.Parameter(torch.randn(num_latents, channels))
-        self.flatten = FlattenWeights(network_spec)
-
-    def forward(self, params):
-        flat_params = self.flatten(params)
-        # (B, num_latents, C)
-        return F.scaled_dot_product_attention(self.embeddings, flat_params,
-                                              flat_params)
-
-
-class CrossAttnDecoder(nn.Module):
-
-    def __init__(self, network_spec, channels, num_params):
-        super().__init__()
-        self.embeddings = nn.Parameter(torch.randn(num_params, channels))
-        self.unflatten = UnflattenWeights(network_spec)
-
-    def forward(self, latents):
-        # latents: (B, num_latents, C)
-        return self.unflatten(
-            F.scaled_dot_product_attention(self.embeddings, latents, latents))

@@ -25,7 +25,6 @@ from loaders import mnist_classification_dataset, mnist_stylize_dataset, mnist_r
 from models import mnist_classification_model, mnist_stylize_model, mnist_rotate_model, mnist_regress_model
 from networks.dwsnets_networks import DWSModelForClassification, DWSModel
 from networks.nfn_networks import TransferNet, TransferRotateNet, NfnSiamese, TransferRotateMergeNet
-from networks.autoencoder import AutoEncoder
 from trainers import mnist_classification_trainer, mnist_stylize_trainer, mnist_rotate_trainer, mnist_regress_trainer
 from visualizers import scalar_visualizer, image_visualizer
 
@@ -252,7 +251,6 @@ def create_network(network_configs, state_dict_path):
         'transfer_net': TransferNet,
         'transfer_rotate_net': TransferRotateNet,
         'transfer_rotate_merge_net': TransferRotateMergeNet,
-        'autoencoder': AutoEncoder,
         'nfn_siamese': NfnSiamese,
     }
 

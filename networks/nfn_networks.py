@@ -3,22 +3,10 @@
 import torch
 from typing import Type, Optional, Union, Tuple, NamedTuple
 from torch import nn
-from networks.nfn_layers import HNPLinear, NPLinear, HNPLinearAngle, TupleOp, Pointwise, SimpleLayerNorm, LearnedScale, HNPLinearAngleMerge
+from networks.nfn_layers import HNPLinear, HNPLinearAngleSum, HNPLinearAngleMerge, TupleOp, Pointwise, SimpleLayerNorm, LearnedScale 
 from networks.nfn_layers import GaussianFourierFeatureTransform, IOSinusoidalEncoding
 from networks.nfn_layers.common import NetworkSpec, ArraySpec, WeightSpaceFeatures
 
-MODE2LAYER = {
-    "PT":
-        Pointwise,
-    "NP":
-        NPLinear,
-    "NP-PosEmb":
-        lambda *args, **kwargs: NPLinear(*args, io_embed=True, **kwargs),
-    "HNP":
-        HNPLinear,
-    "HNP_angle":
-        HNPLinearAngle,
-}
 
 InpEncTypes = Optional[Union[Type[GaussianFourierFeatureTransform],
                              Type[Pointwise]]]
@@ -53,7 +41,7 @@ class TransferNet(nn.Module):
             pos_enc = pos_enc_cls(network_spec)
             layers.append(pos_enc)
             in_channels = pos_enc.num_out_chan(in_channels)
-        layer_cls = MODE2LAYER[mode]
+        layer_cls = HNPLinear
         layers.append(
             layer_cls(network_spec,
                       in_channels=in_channels,
@@ -119,7 +107,7 @@ def pool(weights, biases):
 class Batch(NamedTuple):
     weights: Tuple
     biases: Tuple
-    angle_encoded: torch.Tensor
+    transformation: torch.Tensor
 
 
 class NfnSiamese(nn.Module):
@@ -138,10 +126,10 @@ class NfnSiamese(nn.Module):
         )
 
     def forward(self, lhs_weights, lhs_biases, rhs_weights, rhs_biases,
-                angle_encoded):
+                transformation):
 
         # We just set dummy angle for pretraining.
-        dummy_angle = torch.zeros_like(angle_encoded)
+        dummy_angle = torch.zeros_like(transformation)
         lhs_params = Batch(lhs_weights, lhs_biases, dummy_angle)
         rhs_params = Batch(rhs_weights, rhs_biases, dummy_angle)
 
@@ -173,6 +161,8 @@ class TransferRotateNet(nn.Module):
         lnorm=False,
         out_scale=0.01,
         dropout=0,
+        input_dim=2,
+        hidden_size=64,
     ):
         super().__init__()
         network_spec = NetworkSpec(
@@ -190,9 +180,11 @@ class TransferRotateNet(nn.Module):
             layers.append(pos_enc)
             in_channels = pos_enc.num_out_chan(in_channels)
         layers.append(
-            HNPLinearAngle(network_spec,
-                           in_channels=in_channels,
-                           out_channels=hidden_chan))
+            HNPLinearAngleSum(network_spec,
+                              in_channels=in_channels,
+                              out_channels=hidden_chan,
+                              input_dim=input_dim,
+                              hidden_size=hidden_size))
         if lnorm:
             layers.append(SimpleLayerNorm(network_spec, hidden_chan))
         layers.append(TupleOp(nn.ReLU()))
@@ -200,23 +192,27 @@ class TransferRotateNet(nn.Module):
             layers.append(TupleOp(nn.Dropout(dropout)))
         for _ in range(hidden_layers - 1):
             layers.append(
-                HNPLinearAngle(network_spec,
-                               in_channels=hidden_chan,
-                               out_channels=hidden_chan))
+                HNPLinearAngleSum(network_spec,
+                                  in_channels=hidden_chan,
+                                  out_channels=hidden_chan,
+                                  input_dim=input_dim,
+                                  hidden_size=hidden_size))
             if lnorm:
                 layers.append(SimpleLayerNorm(network_spec, hidden_chan))
             layers.append(TupleOp(nn.ReLU()))
         layers.append(
-            HNPLinearAngle(network_spec,
-                           in_channels=hidden_chan,
-                           out_channels=1))  # !!! DEBUG
+            HNPLinearAngleSum(network_spec,
+                              in_channels=hidden_chan,
+                              out_channels=1,
+                              input_dim=input_dim,
+                              hidden_size=hidden_size))
 
         layers.append(LearnedScale(network_spec, out_scale))
         self.hnet = nn.Sequential(*layers)
 
     def forward(self, batch):
         params = WeightSpaceFeatures(batch.weights, batch.biases,
-                                     batch.angle_encoded)
+                                     batch.transformation)
         return self.hnet(params)
 
 
@@ -234,6 +230,8 @@ class TransferRotateMergeNet(nn.Module):
         lnorm=False,
         out_scale=0.01,
         dropout=0,
+        input_dim=2,
+        hidden_size=64,
     ):
         super().__init__()
         network_spec = NetworkSpec(
@@ -252,7 +250,9 @@ class TransferRotateMergeNet(nn.Module):
         layers.append(
             HNPLinearAngleMerge(network_spec,
                                 in_channels=in_channels,
-                                out_channels=hidden_chan))
+                                out_channels=hidden_chan,
+                                input_dim=input_dim,
+                                hidden_size=hidden_size))
         if lnorm:
             layers.append(SimpleLayerNorm(network_spec, hidden_chan))
         layers.append(TupleOp(nn.ReLU()))
@@ -262,19 +262,23 @@ class TransferRotateMergeNet(nn.Module):
             layers.append(
                 HNPLinearAngleMerge(network_spec,
                                     in_channels=hidden_chan,
-                                    out_channels=hidden_chan))
+                                    out_channels=hidden_chan,
+                                input_dim=input_dim,
+                                hidden_size=hidden_size))
             if lnorm:
                 layers.append(SimpleLayerNorm(network_spec, hidden_chan))
             layers.append(TupleOp(nn.ReLU()))
         layers.append(
             HNPLinearAngleMerge(network_spec,
                                 in_channels=hidden_chan,
-                                out_channels=1))
+                                out_channels=1,
+                                input_dim=input_dim,
+                                hidden_size=hidden_size))
 
         layers.append(LearnedScale(network_spec, out_scale))
         self.hnet = nn.Sequential(*layers)
 
     def forward(self, batch):
         params = WeightSpaceFeatures(batch.weights, batch.biases,
-                                     batch.angle_encoded)
+                                     batch.transformation)
         return self.hnet(params)
