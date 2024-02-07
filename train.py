@@ -1,12 +1,11 @@
 """Train file.
 
 python train.py \
-    --config=./configs/tsplice_config.py \
+    --config=./configs/config.py \
     --output_dir=<output directory path>
 """
 
 import flags
-import torch
 
 from absl import app
 from absl import logging
