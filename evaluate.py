@@ -107,7 +107,7 @@ def main(_):
         log_image = ndimage.zoom(log_image, 5.0)
 
         im = Image.fromarray(log_image)
-        im.save(".samples/sample{i}.jpeg")
+        im.save(f".samples/sample{i}.jpeg")
 
 
 if __name__ == '__main__':
