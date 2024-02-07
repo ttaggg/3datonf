@@ -45,10 +45,7 @@ class MnistTrainer(base_trainer.Trainer):
 
             if i < self._vis_n_batches and self._vis['images']:
 
-                # meta = inputs.angle_delta.cpu().numpy().flatten()
-                # meta = np.rint(meta)
                 meta = None
-
                 log_images = torch.cat([image_in, image_out, new_image], dim=-1)
                 self._vis['images'].log(log_images, prefix, self._current_step,
                                         meta)

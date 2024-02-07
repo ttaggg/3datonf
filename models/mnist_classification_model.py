@@ -11,10 +11,10 @@ class CrossEntropyLoss(nn.Module):
 
     def __init__(self, config):
         super().__init__()
-        self._bce_loss = torch.nn.CrossEntropyLoss()
+        self._ce_loss = torch.nn.CrossEntropyLoss()
 
     def forward(self, target, prediction):
-        loss = self._bce_loss(prediction, target)
+        loss = self._ce_loss(prediction, target)
         return loss.mean()
 
 

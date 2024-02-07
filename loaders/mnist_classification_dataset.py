@@ -6,6 +6,7 @@ from typing import NamedTuple, Tuple, Union
 
 import flags
 import torch
+import numpy as np
 
 from absl import logging
 from sklearn.model_selection import train_test_split
@@ -37,6 +38,21 @@ class Batch(NamedTuple):
 
     def __len__(self):
         return len(self.weights[0])
+
+
+def _preprocess_weights_biases(state_dict):
+
+    # NOTE(oleg): currently only NFNet weights' format is used
+    # and not DWSNet: need to permute axes here and in inr_to_image.
+    # [I, O]
+    weights = tuple([v for w, v in state_dict.items() if "weight" in w])
+    biases = tuple([v for w, v in state_dict.items() if "bias" in w])
+
+    # [F, I, O]: feature dim add
+    weights = tuple([w.unsqueeze(0) for w in weights])
+    biases = tuple([b.unsqueeze(0) for b in biases])
+
+    return weights, biases
 
 
 class MnistInrDatasetFactory:
@@ -98,24 +114,44 @@ class MnistInrDatasetFactory:
                                                       device='cpu')
 
         train_loader = torch.utils.data.DataLoader(dataset=train_dataset,
-                                                   batch_size=32,
+                                                   batch_size=1,
                                                    shuffle=True,
                                                    num_workers=1)
 
-        batch: Batch = next(iter(train_loader))
-        weights_mean = [w.mean(0).to(self._device) for w in batch.weights]
-        weights_std = [w.std(0).to(self._device) for w in batch.weights]
-        biases_mean = [w.mean(0).to(self._device) for w in batch.biases]
-        biases_std = [w.std(0).to(self._device) for w in batch.biases]
+        batch = next(iter(train_loader))
+        weights_x = [x for x in batch.weights]
+        weights_x_2 = [x * x for x in batch.weights]
+        biases_x = [x for x in batch.biases]
+        biases_x_2 = [x * x for x in batch.biases]
+
+        for _, batch in enumerate(train_loader):
+            for j, _ in enumerate(weights_x):
+                weights_x[j] += batch.weights[j]
+                weights_x_2[j] += batch.weights[j] * batch.weights[j]
+            for k, _ in enumerate(biases_x):
+                biases_x[k] += batch.biases[k]
+                biases_x_2[k] += batch.biases[k] * batch.biases[k]
+
+        num_samples = len(train_loader)
+        weights_mean = [(x / num_samples).squeeze(0) for x in weights_x]
+        biases_mean = [(x / num_samples).squeeze(0) for x in biases_x]
+        weights_std = [
+            torch.sqrt((x_2 / num_samples) - (x / num_samples)**2).squeeze(0)
+            for x, x_2 in zip(weights_x, weights_x_2)
+        ]
+        biases_std = [
+            torch.sqrt((x_2 / num_samples) - (x / num_samples)**2).squeeze(0)
+            for x, x_2 in zip(biases_x, biases_x_2)
+        ]
 
         return {
             "weights": {
                 "mean": weights_mean,
-                "std": weights_std
+                "std": weights_std,
             },
             "biases": {
                 "mean": biases_mean,
-                "std": biases_std
+                "std": biases_std,
             },
         }
 
@@ -135,21 +171,28 @@ class MnistInrClassificationDataset(base_dataset.Dataset):
         )
 
     def __getitem__(self, idx):
-        state_dict = torch.load(self._sample_paths[idx],
-                                map_location=self._device)
-
-        weights = tuple(
-            [v.permute(1, 0) for w, v in state_dict.items() if "weight" in w])
-        weights = tuple([w.unsqueeze(-1) for w in weights])
-
-        biases = tuple([v for w, v in state_dict.items() if "bias" in w])
-        biases = tuple([b.unsqueeze(-1) for b in biases])
+        state_dict = torch.load(self._sample_paths[idx], map_location='cpu')
+        weights, biases = _preprocess_weights_biases(state_dict)
 
         if self._statistics is not None:
             weights, biases = self._normalize_weights_biases(weights, biases)
 
-        label = torch.tensor(self._labels[idx]).to(self._device)
-        sample = Batch(weights=weights, biases=biases, label=label)
+        label = torch.tensor(self._labels[idx])
+
+        wm = ws = bm = bs = np.array([])
+        if self._statistics is not None:
+            wm = self._statistics["weights"]["mean"]
+            ws = self._statistics["weights"]["std"]
+            bm = self._statistics["biases"]["mean"]
+            bs = self._statistics["biases"]["std"]
+
+        sample = Batch(weights=weights,
+                       biases=biases,
+                       label=label,
+                       wm=wm,
+                       ws=ws,
+                       bm=bm,
+                       bs=bs)
 
         return sample
 

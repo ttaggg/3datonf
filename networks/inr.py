@@ -52,7 +52,7 @@ class INR(nn.Module):
         self.seq = nn.Sequential(*self.layers)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        return self.seq(x)  # + 0.5  # TODO(oleg): why +0.5 though
+        return self.seq(x)
 
 
 def make_coordinates(shape, bs, coord_range=(-1, 1)):
@@ -107,7 +107,7 @@ class InrToImage:
             params.append(b)
 
         params = tuple(params)
-        
+
         image = self._siren_convert(params)
         image = torch.clip(image, -1, 1)
         image = (image + 1) / 2

@@ -7,15 +7,19 @@ import torch
 
 from absl import logging
 
+from networks.inr3d import InrToShape
 from trainers import base_trainer
 from utils import trainer_utils
 
 
-class MnistTrainer(base_trainer.Trainer):
+class SdfTrainer(base_trainer.Trainer):
     """Trainer for MNIST-INRs."""
 
     def __init__(self, config, model, output_dir, device, visualizers):
         super().__init__(config, model, output_dir, device, visualizers)
+        self._voxel_dim = 20
+        self._inr_to_shape = InrToShape(self._voxel_dim, device)
+        self._config = config
 
     def _compute_gradients(self, inputs):
         """Calculate gradients."""
@@ -33,21 +37,21 @@ class MnistTrainer(base_trainer.Trainer):
         for i, inputs in enumerate(self._test_data):
 
             inputs = self._move_to_device(inputs)
-            losses, output_image = self._model(inputs, evaluation=True)
+            losses, (shape_in, shape_out,
+                     new_shape) = self._model(inputs, evaluation=True)
 
-            # Log losses every step.
-            metrics_dict[f'loss'].append(losses.detach().cpu())
+            # Log losses and metrics every step.
+            metrics_dict[f'loss'].append(losses.detach().cpu().numpy())
+            metrics_dict[f'mse'].append((shape_out - new_shape).square().mean())
 
-            if i < self._vis_n_batches and self._vis['images']:
-                # TODO(oleg): consider adding these everywhere.
-                # output_image = torch.clip(output_image, -1, 1)
-                # output_image =  (output_image + 1) / 2
-                log_images = torch.cat(
-                    [inputs.image_in, inputs.image_out, output_image], dim=-1)
-                self._vis['images'].log(log_images, prefix, self._current_step)
+        current_lr = trainer_utils.get_learning_rate(self._lr_scheduler,
+                                                     self._config)
+        metrics_dict['lr'] = [current_lr]
 
-        current_lr = trainer_utils.get_learning_rate(self._lr_scheduler)
-        metrics_dict['lr'] = current_lr
+        mean_mse = torch.stack(
+            metrics_dict[f'mse']).mean().detach().cpu().numpy()
+        metrics_dict[f'mse'] = [mean_mse]
+        metrics_dict[f'psnr'].append(-10 * np.log10(mean_mse))
 
         for metric_name, values in metrics_dict.items():
             scalar = torch.tensor(np.stack(values)).mean()

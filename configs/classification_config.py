@@ -6,19 +6,23 @@
 import os
 
 _DATA_PATH = '../../datasets'
-_BATCH_SIZE = 512
+_BATCH_SIZE = 256
 
 model = {
     'model_name': 'mnist_classification_model',
     'network': {
-        'network_name': 'dwsnet_classification',
+        'network_name': 'nfn_classification',
         'network_params': {
-            'weight_shapes': tuple([(2, 32, ), (32, 32, ), (32, 1, )]),
+            'weight_shapes': tuple([(32, 2,), (32, 32,), (1, 32,)]),
             'bias_shapes': tuple([(32,), (32,), (1, )]),
-            'input_features': 1,
-            'hidden_dim': 32,
-            'n_hidden': 4,
-            'bn': True,
+            'inp_enc_cls': 'gaussian',
+            'pos_enc_cls': None,
+            'hidden_chan': 128,
+            'hidden_layers': 3,
+            'mode': 'HNP',
+            'out_scale': 0.01,
+            'lnorm': False,
+            'dropout': 0,
         }
     },
     'batch_size': _BATCH_SIZE,
@@ -39,24 +43,25 @@ training = {
     },
     'optimizer': {
         'name': 'adamw',
-        'learning_rate': 1e-3,
+        'learning_rate': 5e-4,
         'amsgrad': True,
         'weight_decay': 5e-4
     },
     # LR-scheduler.
     'lr_scheduler': {
-        'name': 'step_lr',
+        'name': 'reduce_on_plateau',
         'params': {
-            'step_size': 20,
-            'gamma': 0.3,
+            'factor': 0.5,
+            'patience': 3,
+            'threshold': 0.001,
+            'min_lr': 1e-6,
         }
     }
 }
 
-
 data = {
     'task': 'mnist_classification',
-    'dataset_path':  os.path.join(_DATA_PATH, 'mnist-inrs'),
+    'dataset_path':  os.path.join(_DATA_PATH, 'mnist-inr-medium'),
     'normalize': True,
-    'num_workers': 8,
+    'num_workers': 4,
 }

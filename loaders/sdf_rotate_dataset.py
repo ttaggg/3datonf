@@ -1,25 +1,18 @@
-""""Dataset for MNIST-INRs."""
+""""Dataset for SDF-INRs."""
 
-import glob
 import json
 import os
-import re
 from typing import NamedTuple, Tuple
 
 import flags
-# https://github.com/pytorch/pytorch/issues/1355
-import cv2
-
-cv2.setNumThreads(0)
-cv2.ocl.setUseOpenCL(False)
-
 import numpy as np
 import torch
 
 from absl import logging
-from PIL import Image
-from sklearn.model_selection import train_test_split
 
+import os
+
+from networks.inr3d import InrToShape, Siren
 from loaders import base_dataset
 
 FLAGS = flags.FLAGS
@@ -47,8 +40,8 @@ class Batch(NamedTuple):
     angle_delta: torch.Tensor
     angle_delta_rad: torch.Tensor
     transformation: torch.Tensor
-    image_in: torch.Tensor
-    image_out: torch.Tensor
+    sdf_in: torch.Tensor
+    rot_matrix: torch.Tensor
     wm: Tuple
     ws: Tuple
     bm: Tuple
@@ -67,8 +60,8 @@ class Batch(NamedTuple):
                               angle_delta=self.angle_delta.to(device),
                               angle_delta_rad=self.angle_delta_rad.to(device),
                               transformation=self.transformation.to(device),
-                              image_in=self.image_in.to(device),
-                              image_out=self.image_out.to(device),
+                              sdf_in=self.sdf_in.to(device),
+                              rot_matrix=self.rot_matrix.to(device),
                               wm=tuple(k.to(device) for k in self.wm),
                               ws=tuple(k.to(device) for k in self.ws),
                               bm=tuple(k.to(device) for k in self.bm),
@@ -78,13 +71,29 @@ class Batch(NamedTuple):
         return len(self.weights[0])
 
 
-class MnistInrDatasetFactory:
+class SdfDatasetFactory:
     """Create train-val-test split and return three loaders."""
 
     def __init__(self, config, device):
         self._dataset_path = config['dataset_path']
-        self._val_size = config.get('val_size', 0.1)
-        self._test_size = config.get('val_size', 0.1)
+
+        all = [
+            'Roundbox',
+            'Capsule',
+            'Cylinder',
+            'Dodecahedron',
+            'Octabound',
+            'Roundbox',
+            'Cube',
+            'Sphere',
+            'Triprismbound',
+            'Octahedron',
+            'Icosahedron',
+            'Torus',
+        ]
+        self._train_names = all
+        self._val_names = ['Hexprism']
+        self._test_names = ['Hexprism']
         self._device = device
         self._config = config
         self._normalize = config.get('normalize', False)
@@ -92,40 +101,26 @@ class MnistInrDatasetFactory:
 
     def split(self):
 
-        # Get val set from train set.
-        train_val_test_set = []
+        train_set = []
+        for name in self._train_names:
+            subdir = os.path.join(self._dataset_path, 'sdf_models', name)
+            model = os.path.join(subdir, 'model_normal.pt')
+            points = os.path.join(subdir, 'points_normal.npz')
+            train_set.append((model, points, name))
 
-        # iterate through subdirs, take pairs of samples
-        subdirs = glob.glob(os.path.join(self._dataset_path, '**'))
-        for subdir in subdirs:
-            samples = glob.glob(os.path.join(subdir, '**'))
-            # avoid files with invalid name like 1405/model90(1).pt
-            models = list(
-                filter(lambda x: re.search(r'model[0-9]+.pt$', x), samples))
-            models = sorted(models,
-                            key=lambda k: int(re.findall('[0-9]+', k)[-1]))
+        val_set = []
+        for name in self._val_names:
+            subdir = os.path.join(self._dataset_path, 'sdf_models', name)
+            model = os.path.join(subdir, 'model_normal.pt')
+            points = os.path.join(subdir, 'points_normal.npz')
+            val_set.append((model, points, name))
 
-            # make sure sequence is exactly the same as models
-            images = list(
-                filter(lambda x: re.search(r'image[0-9]+.bmp', x), samples))
-            images = sorted(images,
-                            key=lambda k: int(re.findall('[0-9]+', k)[-1]))
-
-            angles = [int(re.findall(r'[0-9]+', x)[-1]) for x in models]
-
-            assert len(images) == len(models)
-
-            for l, model in enumerate(models):
-                train_val_test_set.append([models[l], images[l], angles[l]])
-
-        train_val_set, test_set = train_test_split(
-            train_val_test_set,
-            test_size=self._test_size,
-            random_state=FLAGS.random_seed)
-
-        train_set, val_set = train_test_split(train_val_set,
-                                              test_size=self._val_size,
-                                              random_state=FLAGS.random_seed)
+        test_set = []
+        for name in self._test_names:
+            subdir = os.path.join(self._dataset_path, 'sdf_models', name)
+            model = os.path.join(subdir, 'model_normal.pt')
+            points = os.path.join(subdir, 'points_normal.npz')
+            test_set.append((model, points, name))
 
         statistics = None
         if self._enforced_statistics is not None:
@@ -143,31 +138,31 @@ class MnistInrDatasetFactory:
         if self._normalize and not self._enforced_statistics:
             statistics = self._calculate_statistics(train_set)
 
-        train_dataset = MnistInrDataset(train_set,
-                                        statistics=statistics,
-                                        is_training=True,
-                                        config=self._config,
-                                        device=self._device)
-        val_dataset = MnistInrDataset(val_set,
-                                      statistics=statistics,
-                                      is_training=False,
-                                      config=self._config,
-                                      device=self._device)
-        test_dataset = MnistInrDataset(test_set,
-                                       statistics=statistics,
-                                       is_training=False,
-                                       config=self._config,
-                                       device=self._device)
+        train_dataset = SdfDataset(train_set,
+                                   statistics=statistics,
+                                   is_training=True,
+                                   config=self._config,
+                                   device=self._device)
+        val_dataset = SdfDataset(val_set,
+                                 statistics=statistics,
+                                 is_training=False,
+                                 config=self._config,
+                                 device=self._device)
+        test_dataset = SdfDataset(test_set,
+                                  statistics=statistics,
+                                  is_training=False,
+                                  config=self._config,
+                                  device=self._device)
 
         return train_dataset, val_dataset, test_dataset
 
     def _calculate_statistics(self, train_set):
 
-        train_dataset = MnistInrDataset(train_set,
-                                        statistics=None,
-                                        is_training=True,
-                                        config=self._config,
-                                        device='cpu')
+        train_dataset = SdfDataset(train_set,
+                                   statistics=None,
+                                   is_training=True,
+                                   config=self._config,
+                                   device='cpu')
 
         train_loader = torch.utils.data.DataLoader(dataset=train_dataset,
                                                    batch_size=1,
@@ -199,9 +194,6 @@ class MnistInrDatasetFactory:
             torch.sqrt((x_2 / num_samples) - (x / num_samples)**2).squeeze(0)
             for x, x_2 in zip(biases_x, biases_x_2)
         ]
-
-        # Save statistics to load it later without long calculation with
-        # "enforced_statistics" in config.
 
         # import json
         # with open("/Users/oleg/study_repos/3datonf/stat/default_stat.json", "w") as outfile:
@@ -240,22 +232,21 @@ def _nerf_encode(x, depth=1):
     return outputs
 
 
-def _getTranslationMatrix2D(dx, dy):
-    """
-    Returns a numpy affine transformation matrix for a 2D translation of
-    (dx, dy)
-    """
-    return np.matrix([[1, 0, dx], [0, 1, dy], [0, 0, 1]])
-
-
-class MnistInrDataset(base_dataset.Dataset):
-    """Custom dataset for MNIST-INRs data."""
+class SdfDataset(base_dataset.Dataset):
+    """Custom dataset for SDF-INRs data."""
 
     def __init__(self, dataset, statistics, is_training, config, device):
         super().__init__(dataset, is_training)
         self._samples = dataset
         self._statistics = statistics
         self._device = device
+        self._voxel_dim = 20
+        self._inr_to_shape = InrToShape(self._voxel_dim, device)
+        self._siren = Siren(in_features=3,
+                            out_features=1,
+                            hidden_features=128,
+                            hidden_layers=2,
+                            outermost_linear=True)
 
         logging.info(f'Dataset size: {len(self._samples)}, '
                      f'device: {device}, training: {is_training}.')
@@ -264,16 +255,17 @@ class MnistInrDataset(base_dataset.Dataset):
     def __getitem__(self,
                     idx,
                     angle_input=None,
-                    trans_input=None,
                     angle_delta_min=-90,
-                    angle_delta_max=90,
-                    trans_min=-0.25,
-                    trans_max=0.25):
+                    angle_delta_max=90):
 
-        model_in, image_in, _ = self._samples[idx]
+        model_in, points_in, name = self._samples[idx]
+        # model_in, points, model_out, angle_delta, name =  self._samples[idx]
 
         state_dict_in = torch.load(model_in, map_location='cpu')
         weights_in, biases_in = _preprocess_weights_biases(state_dict_in)
+
+        sdf_in = self._inr_to_shape(weights_in, biases_in)
+        sdf_in = sdf_in.squeeze(0).cpu().numpy()
 
         if angle_input is None:
             angle_delta = np.random.choice(
@@ -281,26 +273,16 @@ class MnistInrDataset(base_dataset.Dataset):
         else:
             angle_delta = angle_input
 
-        if trans_input is None:
-            trans = np.random.uniform(low=trans_min, high=trans_max, size=(2,))
-        else:
-            trans = trans_input
-
-        # Rotation and Translation
-        T = _getTranslationMatrix2D(14 * trans[0], 14 * trans[1])
-        R = np.vstack(
-            [cv2.getRotationMatrix2D((14, 14), angle_delta, 1.0), [0, 0, 1]])
-        affine_mat = (np.matrix(T) * np.matrix(R))[0:2, :]
-
-        image_in = np.array(Image.open(image_in).convert('L'),
-                            dtype=np.float32) / 255
-        image_out = cv2.warpAffine(image_in, affine_mat, (28, 28))
-        image_out = torch.tensor(image_out, dtype=torch.float32).unsqueeze(0)
+        theta = angle_delta_rad = np.deg2rad(angle_delta)
+        rot_matrix = torch.tensor(
+            [[1, 0, 0], [0, np.cos(theta), -np.sin(theta)],
+             [0, np.sin(theta), np.cos(theta)]],
+            dtype=torch.float32)
 
         angle_delta = torch.tensor(angle_delta).unsqueeze(0)
-        angle_delta_rad = torch.deg2rad(angle_delta)
+        angle_delta_rad = torch.tensor(angle_delta_rad)
 
-        transformation = torch.tensor([angle_delta_rad, trans[0], trans[1]],
+        transformation = torch.tensor([angle_delta_rad],
                                       dtype=torch.float32).reshape((1, -1))
         transformation = _nerf_encode(transformation, depth=1)
 
@@ -320,8 +302,8 @@ class MnistInrDataset(base_dataset.Dataset):
                        angle_delta=angle_delta,
                        angle_delta_rad=angle_delta_rad,
                        transformation=transformation,
-                       image_in=image_in,
-                       image_out=image_out,
+                       sdf_in=sdf_in,
+                       rot_matrix=rot_matrix,
                        wm=wm,
                        ws=ws,
                        bm=bm,

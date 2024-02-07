@@ -6,7 +6,7 @@
 import os
 
 _DATA_PATH = '../../datasets'
-_BATCH_SIZE = 512
+_BATCH_SIZE = 810
 
 model = {
     'model_name': 'mnist_rotate_model',
@@ -73,5 +73,6 @@ data = {
     'task': 'mnist_rotate',
     'dataset_path':  os.path.join(_DATA_PATH, 'less_converged'),
     'normalize': True,
+    'enforced_statistics': './stat/default_stat.json',
     'num_workers': 4,
 }

@@ -72,6 +72,7 @@ class LearnedScale(nn.Module):
             out_biases.append(bias * self.bias_scales[i])
         return WeightSpaceFeatures(out_weights, out_biases, wsfeat.angle)
 
+
 class TupleOp(nn.Module):
 
     def __init__(self, op):
@@ -90,4 +91,3 @@ class TupleOp(nn.Module):
 
     def __repr__(self):
         return f"TupleOp({self.op})"
-

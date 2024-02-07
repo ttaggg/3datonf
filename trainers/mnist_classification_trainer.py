@@ -16,6 +16,7 @@ class MnistTrainer(base_trainer.Trainer):
 
     def __init__(self, config, model, output_dir, device, visualizers):
         super().__init__(config, model, output_dir, device, visualizers)
+        self._config = config
 
     def _compute_gradients(self, inputs):
         """Calculate gradients."""
@@ -32,7 +33,7 @@ class MnistTrainer(base_trainer.Trainer):
 
         ground_truth = []
         predictions = []
-        for i, inputs in enumerate(self._test_data):
+        for _, inputs in enumerate(self._test_data):
 
             inputs = self._move_to_device(inputs)
             losses, outputs = self._model(inputs, evaluation=True)
@@ -41,13 +42,14 @@ class MnistTrainer(base_trainer.Trainer):
             predictions.extend(outputs.argmax(1).cpu().numpy())
 
             # Log losses every step.
-            metrics_dict[f'loss'].append(losses.detach().cpu())
+            metrics_dict[f'loss'].append(losses.detach().cpu().numpy())
 
         accuracy = np.array(ground_truth) == np.array(predictions)
-        metrics_dict[f'accuracy'] = accuracy.astype(np.float32)
+        metrics_dict[f'accuracy'] = [accuracy.astype(np.float32)]
 
-        current_lr = trainer_utils.get_learning_rate(self._lr_scheduler)
-        metrics_dict['lr'] = current_lr
+        current_lr = trainer_utils.get_learning_rate(self._lr_scheduler,
+                                                     self._config)
+        metrics_dict['lr'] = [current_lr]
 
         for metric_name, values in metrics_dict.items():
             scalar = torch.tensor(np.stack(values)).mean()

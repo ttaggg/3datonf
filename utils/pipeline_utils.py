@@ -19,13 +19,12 @@ from dataclasses import dataclass
 
 import numpy as np
 import torch
-from torchvision.models import regnet_y_800mf
 
-from loaders import mnist_classification_dataset, mnist_stylize_dataset, mnist_rotate_dataset
-from models import mnist_classification_model, mnist_stylize_model, mnist_rotate_model, mnist_regress_model
-from networks.dwsnets_networks import DWSModelForClassification, DWSModel
-from networks.nfn_networks import TransferNet, TransferRotateNet, NfnSiamese, TransferRotateMergeNet
-from trainers import mnist_classification_trainer, mnist_stylize_trainer, mnist_rotate_trainer, mnist_regress_trainer
+from loaders import mnist_classification_dataset
+from loaders import mnist_rotate_dataset, sdf_rotate_dataset
+from models import mnist_classification_model, mnist_rotate_model, sdf_rotate_model
+from networks.nfn_networks import TransferRotateNet, TransferNetClassify
+from trainers import mnist_classification_trainer, mnist_rotate_trainer, sdf_rotate_trainer
 from visualizers import scalar_visualizer, image_visualizer
 
 
@@ -69,6 +68,7 @@ def set_device(force_device):
     if torch.cuda.is_available():
         return torch.device("cuda")
     elif torch.backends.mps.is_available():
+        # does not work in a reliable way
         return torch.device("mps")
     return torch.device("cpu")
 
@@ -126,15 +126,12 @@ def create_trainer(config, model, visualizers, output_dir, device):
     if trainer_name == 'mnist_classification_trainer':
         return mnist_classification_trainer.MnistTrainer(
             config, model, output_dir, device, visualizers)
-    elif trainer_name == 'mnist_stylize_trainer':
-        return mnist_stylize_trainer.MnistTrainer(config, model, output_dir,
-                                                  device, visualizers)
     elif trainer_name == 'mnist_rotate_trainer':
         return mnist_rotate_trainer.MnistTrainer(config, model, output_dir,
                                                  device, visualizers)
-    elif trainer_name == 'mnist_regress_trainer':
-        return mnist_regress_trainer.MnistTrainer(config, model, output_dir,
-                                                  device, visualizers)
+    elif trainer_name == 'sdf_rotate_trainer':
+        return sdf_rotate_trainer.SdfTrainer(config, model, output_dir, device,
+                                             visualizers)
     raise ValueError(f'Unknown trainer was given: {trainer_name}.')
 
 
@@ -189,16 +186,15 @@ def create_loader(data_config, model_config, device):
             data_config, device)
         train_loader, val_loader, test_loader = factory.split()
 
-    elif task_name == 'mnist_stylize':
-
-        factory = mnist_stylize_dataset.MnistInrDatasetFactory(
-            data_config, device)
-        train_loader, val_loader, test_loader = factory.split()
-
-    elif task_name == 'mnist_rotate' or task_name == 'mnist_regress':
+    elif task_name == 'mnist_rotate':
 
         factory = mnist_rotate_dataset.MnistInrDatasetFactory(
             data_config, device)
+        train_loader, val_loader, test_loader = factory.split()
+
+    elif task_name == 'sdf_rotate':
+
+        factory = sdf_rotate_dataset.SdfDatasetFactory(data_config, device)
         train_loader, val_loader, test_loader = factory.split()
 
     else:
@@ -245,13 +241,8 @@ def _load_state_dict(state_dict_path):
 def create_network(network_configs, state_dict_path):
 
     networks_dict = {
-        'regnet_y_800mf': regnet_y_800mf,
-        'dwsnet_classification': DWSModelForClassification,
-        'dwsnet': DWSModel,
-        'transfer_net': TransferNet,
         'transfer_rotate_net': TransferRotateNet,
-        'transfer_rotate_merge_net': TransferRotateMergeNet,
-        'nfn_siamese': NfnSiamese,
+        'nfn_classification': TransferNetClassify,
     }
 
     network_name = network_configs['network_name']
@@ -260,11 +251,7 @@ def create_network(network_configs, state_dict_path):
     if network_name not in networks_dict:
         raise ValueError(f'Unknown network name is given: {network_name}.')
 
-    if network_name != 'nfn_siamese':
-        network = networks_dict[network_name](**network_params).float()
-    else:
-        model = TransferRotateNet(**network_params).float()
-        network = NfnSiamese(model)
+    network = networks_dict[network_name](**network_params).float()
 
     init_step = 0
 
@@ -306,21 +293,16 @@ def create_model(model_configs, device, weights=None):
             network=network,
             init_step=init_step,
             device=device)
-    elif model_configs['model_name'] == 'mnist_stylize_model':
-        model = mnist_stylize_model.MnistInrStylizeModel(config=model_configs,
-                                                         network=network,
-                                                         init_step=init_step,
-                                                         device=device)
     elif model_configs['model_name'] == 'mnist_rotate_model':
         model = mnist_rotate_model.MnistInrRotateModel(config=model_configs,
                                                        network=network,
                                                        init_step=init_step,
                                                        device=device)
-    elif model_configs['model_name'] == 'mnist_regress_model':
-        model = mnist_regress_model.MnistInrRegressModel(config=model_configs,
-                                                         network=network,
-                                                         init_step=init_step,
-                                                         device=device)
+    elif model_configs['model_name'] == 'sdf_rotate_model':
+        model = sdf_rotate_model.SdfModel(config=model_configs,
+                                          network=network,
+                                          init_step=init_step,
+                                          device=device)
     else:
         raise ValueError(f'Unknown model name: {model_configs["model_name"]}.')
 

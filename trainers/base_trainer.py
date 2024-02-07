@@ -7,7 +7,8 @@ import numpy as np
 import torch
 from absl import logging
 
-from loaders.mnist_rotate_dataset import Batch  # that's a bug though, make a parent class for all trainers
+# that's a bug though, make a parent class for all trainers, not just rotate
+from loaders.mnist_rotate_dataset import Batch
 from utils import trainer_utils as tu
 
 
@@ -59,11 +60,6 @@ class Trainer(abc.ABC):
                 inputs[key] = value.to(self._device)
         elif isinstance(inputs, Batch):
             inputs.to(self._device)
-        # elif isinstance(inputs, (tuple, list)):
-        # TODO(oleg): that's not good
-        # for x in inputs:
-        # for y in x:
-        # y.to(self._device)
         else:
             inputs.to(self._device)
         return inputs

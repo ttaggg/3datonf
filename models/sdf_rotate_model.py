@@ -5,7 +5,7 @@ import torch
 from torch import nn
 
 from models import base_model
-from networks.inr import InrToImage
+from networks.inr3d import InrToShape
 
 
 class MeanSquareError(nn.Module):
@@ -19,7 +19,7 @@ class MeanSquareError(nn.Module):
         return loss.mean()
 
 
-class MnistInrRotateModel(base_model.BaseModel):
+class SdfModel(base_model.BaseModel):
     """MNIST model class."""
 
     def __init__(self, config, network, init_step, device):
@@ -30,7 +30,9 @@ class MnistInrRotateModel(base_model.BaseModel):
             self._loss_fn = MeanSquareError(loss_config)
         else:
             raise ValueError('Only mse is supported.')
-        self._inr_to_image = InrToImage((28, 28, 1), device)
+
+        self._voxel_dim = 20
+        self._inr_to_shape = InrToShape(self._voxel_dim, device)
 
     def model_outputs(self, inputs):
         outputs = self._network(inputs)
@@ -56,17 +58,18 @@ class MnistInrRotateModel(base_model.BaseModel):
 
         new_weights, new_biases = self._unnormalize_weights_biases(
             new_weights, new_biases, inputs.wm, inputs.ws, inputs.bm, inputs.bs)
-        new_image = self._inr_to_image(new_weights, new_biases)
 
-        # Can be removed, like why do we even need this, better pass the image
-        # from the dataloader.
+        # We pass rotation matrix and modify input coordinates before applying MLP.
+        new_sdf = self._inr_to_shape(new_weights, new_biases, inputs.rot_matrix)
         weights_in, biases_in = self._unnormalize_weights_biases(
             inputs.weights, inputs.biases, inputs.wm, inputs.ws, inputs.bm,
             inputs.bs)
-        image_in = self._inr_to_image(weights_in, biases_in)
 
-        loss = self.compute_loss(inputs.image_out, new_image)
+        sdf_in = self._inr_to_shape(weights_in, biases_in)
+        sdf_out = self._inr_to_shape(weights_in, biases_in, inputs.rot_matrix)
+
+        loss = self.compute_loss(sdf_in, new_sdf)
 
         if evaluation:
-            return loss, (image_in, inputs.image_out, new_image)
+            return loss, (sdf_in, sdf_out, new_sdf)
         return loss

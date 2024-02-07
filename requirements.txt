@@ -5,3 +5,5 @@ packaging==23.2 # why though?
 random-fourier-features-pytorch==1.0.1
 opencv-python==4.8.1.78
 einops==0.7.0
+scikit-image==0.22.0
+matplotlib==3.8.2

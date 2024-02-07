@@ -40,7 +40,6 @@ class SimpleLayerNorm(nn.Module):
         return f"SimpleLayerNorm(channels={self.channels})"
 
 
-
 class ChannelLayerNorm(nn.Module):
 
     def __init__(self, channels, eps=1e-5):
